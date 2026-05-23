@@ -12,7 +12,9 @@ def create_app() -> FastAPI:
     application = FastAPI(title="Language Puzzle MVP")
     application.mount("/assets", StaticFiles(directory=PUBLIC_DIR), name="assets")
     application.include_router(api_router)
-    application.add_event_handler("startup", startup)
+    @application.on_event("startup")
+    async def on_startup():
+        await startup()
     return application
 
 
