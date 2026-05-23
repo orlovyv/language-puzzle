@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     application.include_router(api_router)
     @application.on_event("startup")
     async def on_startup():
-        await startup()
+        startup()
     return application
 
 
