@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+spacy
+psycopg[binary]
+googletrans
+eng-to-ipa
+requests
+numpy
+wordfreq
