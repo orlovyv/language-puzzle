@@ -3,9 +3,11 @@ const app = document.querySelector("#app");
 const state = {
   user: null,
   route: window.location.pathname,
+  uiMode: readUiMode(),
   dashboard: null,
   documents: [],
   currentDocument: null,
+  lastDocumentId: "",
   currentAnalysis: null,
   analysisDocumentId: null,
   selectedAnalysisKey: null,
@@ -37,6 +39,7 @@ const MAX_UPLOAD_FILE_BYTES = 100 * 1024;
 const MAX_RAW_TEXT_LINES = 2000;
 const SUPPORTED_UPLOAD_EXTENSIONS = new Set([".txt", ".srt"]);
 const SUPPORTED_UPLOAD_MIME_TYPES = new Set(["", "text/plain", "application/x-subrip"]);
+const UI_MODE_STORAGE_KEY = "languagePuzzle.uiMode";
 
 const routes = [
   ["/dashboard", "Dashboard", "⌂"],
@@ -47,6 +50,24 @@ const routes = [
   ["/help", "Help", "?"],
   ["/settings", "Settings", "⚙"]
 ];
+
+function readUiMode() {
+  try {
+    return localStorage.getItem("languagePuzzle.uiMode") === "mobile" ? "mobile" : "desktop";
+  } catch {
+    return "desktop";
+  }
+}
+
+function setUiMode(mode) {
+  state.uiMode = mode === "mobile" ? "mobile" : "desktop";
+  try {
+    localStorage.setItem(UI_MODE_STORAGE_KEY, state.uiMode);
+  } catch {
+    // localStorage can be unavailable in restricted browser modes.
+  }
+  renderApp();
+}
 
 window.addEventListener("popstate", () => {
   state.route = window.location.pathname;
@@ -184,6 +205,7 @@ async function loadRoute() {
       }
     } else if (state.route.startsWith("/document/")) {
       const [, , id, view] = state.route.split("/");
+      state.lastDocumentId = id;
       if (view === "analysis") {
         if (state.analysisDocumentId !== id) {
           state.selectedAnalysisKey = null;
@@ -403,32 +425,97 @@ function renderPublicHelp() {
 }
 
 function renderApp() {
+  const isMobileMode = state.uiMode === "mobile";
   app.innerHTML = `
-    <div class="shell">
+    <div class="shell ${isMobileMode ? "mobile-mode" : "desktop-mode"}">
       <aside class="sidebar">
         <a class="brand" data-link href="/">Language Puzzle</a>
+        ${renderUiModeSwitch()}
         <nav class="nav">
-          ${routes.map(([path, label, icon]) => `<a data-link class="${state.route === path ? "active" : ""}" href="${path}" title="${label}"><span>${icon}</span> ${label}</a>`).join("")}
+          ${renderNavigationLinks("desktop")}
         </nav>
         <div class="userline">
           <div>${escapeHtml(state.user?.email || "")}</div>
-          <button class="ghost" id="logoutBtn">Выйти</button>
         </div>
       </aside>
       <main class="main ${isDocumentReaderRoute() ? "document-main" : ""}">
         ${state.message ? `<p class="notice">${escapeHtml(state.message)}</p>` : ""}
         ${renderRoute()}
       </main>
+      <nav class="mobile-bottom-nav" aria-label="Mobile navigation">
+        ${renderNavigationLinks("mobile")}
+        ${renderMobileModeButton()}
+      </nav>
     </div>
   `;
-  document.querySelector("#logoutBtn")?.addEventListener("click", async () => {
+  document.querySelectorAll("[data-logout]").forEach((button) => button.addEventListener("click", async () => {
     await api("/api/logout", { method: "POST" });
     state.user = null;
     state.route = "/login";
     window.history.pushState({}, "", "/login");
     renderAuth();
+  }));
+  document.querySelectorAll("[data-ui-mode]").forEach((button) => {
+    button.addEventListener("click", () => setUiMode(button.dataset.uiMode));
   });
   bindRoute();
+}
+
+function isNavRouteActive(path) {
+  if (state.route === path) return true;
+  return path === "/dashboard" && state.route.startsWith("/document/");
+}
+
+function navigationItems() {
+  const documentId = currentDocumentIdFromRoute() || state.lastDocumentId || state.dashboard?.documents?.[0]?.id || "";
+  const textPath = documentId ? `/document/${documentId}` : "";
+  const analysisPath = documentId ? `/document/${documentId}/analysis` : "";
+  return [
+    routes[0],
+    [textPath, "Текст", "T", !documentId],
+    [analysisPath, "Анализ", "A", !documentId],
+    ...routes.slice(1)
+  ];
+}
+
+function renderNavigationLinks(variant = "desktop") {
+  return navigationItems().map(([path, label, icon, disabled]) => {
+    const active = isNavigationItemActive(path);
+    const content = variant === "mobile"
+      ? `<span>${icon}</span><small>${label}</small>`
+      : `<span>${icon}</span> ${label}`;
+    if (disabled) {
+      return `<span class="nav-disabled" title="Сначала откройте текст из Dashboard">${content}</span>`;
+    }
+    return `<a data-link class="${active ? "active" : ""}" href="${path}" title="${label}">${content}</a>`;
+  }).join("");
+}
+
+function isNavigationItemActive(path) {
+  if (path.includes("/document/")) return state.route === path;
+  if (path === "/dashboard" && currentDocumentIdFromRoute()) return false;
+  return isNavRouteActive(path);
+}
+
+function renderUiModeSwitch() {
+  const mode = state.uiMode === "mobile" ? "mobile" : "desktop";
+  return `
+    <div class="ui-mode-switch" role="group" aria-label="Версия интерфейса">
+      <button type="button" class="${mode === "desktop" ? "active" : ""}" data-ui-mode="desktop" aria-pressed="${mode === "desktop"}">Desktop</button>
+      <button type="button" class="${mode === "mobile" ? "active" : ""}" data-ui-mode="mobile" aria-pressed="${mode === "mobile"}">Mobile</button>
+    </div>
+  `;
+}
+
+function renderMobileModeButton() {
+  const nextMode = state.uiMode === "mobile" ? "desktop" : "mobile";
+  const label = state.uiMode === "mobile" ? "Desktop" : "Mobile";
+  return `<button type="button" class="mobile-mode-nav-button" data-ui-mode="${nextMode}" title="${label}"><span>⇄</span><small>${label}</small></button>`;
+}
+
+function currentDocumentIdFromRoute() {
+  if (!state.route.startsWith("/document/")) return "";
+  return state.route.split("/")[2] || "";
 }
 
 function renderRoute() {
@@ -593,7 +680,7 @@ function renderDashboard() {
       ${metric("Среднее покрытие", `${stats.average_coverage || 0}%`)}
     </section>
     <section class="card" style="margin-top:16px">
-      <table class="table">
+      <table class="table desktop-table">
         <thead><tr><th>Название</th><th>Тип</th><th>Слов</th><th>Уникальных</th><th>Покрытие</th><th></th></tr></thead>
         <tbody>
           ${data.documents.length ? data.documents.map((doc) => `
@@ -603,10 +690,25 @@ function renderDashboard() {
               <td>${doc.total_words}</td>
               <td>${doc.unique_words}</td>
               <td><span class="pill known">${doc.coverage_percent}%</span></td>
-              <td class="toolbar"><a data-link href="/document/${doc.id}/analysis"><button>Анализ</button></a><button class="icon" data-delete-doc="${doc.id}" title="Удалить">×</button></td>
+              <td class="toolbar"><a data-link href="/document/${doc.id}"><button>Открыть</button></a><button class="icon" data-delete-doc="${doc.id}" title="Удалить">×</button></td>
             </tr>`).join("") : `<tr><td colspan="6"><div class="empty">Пока нет текстов. Первый анализ начинается с кнопки “Загрузить”.</div></td></tr>`}
         </tbody>
       </table>
+      <div class="mobile-card-list dashboard-mobile-list">
+        ${data.documents.length ? data.documents.map((doc) => `
+          <article class="mobile-list-card">
+            <div>
+              <h3><a data-link href="/document/${doc.id}">${escapeHtml(doc.title)}</a></h3>
+              <p class="meta">${escapeHtml(doc.type)} · ${doc.total_words} слов · ${doc.unique_words} уникальных</p>
+            </div>
+            <div class="mobile-card-actions">
+              <span class="pill known">${doc.coverage_percent}%</span>
+              <a data-link href="/document/${doc.id}"><button>Открыть</button></a>
+              <button class="icon" data-delete-doc="${doc.id}" title="Удалить">×</button>
+            </div>
+          </article>
+        `).join("") : `<div class="empty">Пока нет текстов. Первый анализ начинается с кнопки “Загрузить”.</div>`}
+      </div>
     </section>
   `;
 }
@@ -636,7 +738,7 @@ function renderDocument() {
   const doc = state.currentDocument;
   if (!doc) return `<div class="empty">Документ загружается...</div>`;
   return `
-    ${renderHeader(escapeHtml(doc.title), `Покрытие: ${doc.analysis.coverage_percent}% · Уникальное: ${doc.analysis.unique_coverage_percent}%`, `<a data-link href="/document/${doc.id}/analysis"><button>Анализ</button></a>`)}
+    ${renderHeader(escapeHtml(doc.title), `Покрытие: ${doc.analysis.coverage_percent}% · Уникальное: ${doc.analysis.unique_coverage_percent}%`, renderDocumentViewSwitch(doc.id, "text"))}
     <section class="grid two document-workspace">
       <article class="card text-reader document-reader">
         ${doc.pieces.map((piece, index) => piece.type === "text"
@@ -650,6 +752,15 @@ function renderDocument() {
   `;
 }
 
+function renderDocumentViewSwitch(documentId, activeView) {
+  return `
+    <div class="view-switch" role="tablist" aria-label="Режим просмотра документа">
+      <a data-link role="tab" aria-selected="${activeView === "text"}" class="${activeView === "text" ? "active" : ""}" href="/document/${documentId}">Текст</a>
+      <a data-link role="tab" aria-selected="${activeView === "analysis"}" class="${activeView === "analysis" ? "active" : ""}" href="/document/${documentId}/analysis">Анализ</a>
+    </div>
+  `;
+}
+
 function renderWordDetail(word) {
   if (!word) return `<h2>Слово</h2><p class="subtle">Кликните по подсвеченному слову в тексте.</p>`;
   const isPhrase = word.type === "phrase";
@@ -659,10 +770,9 @@ function renderWordDetail(word) {
   const examples = cleanExample(word.example) ? [cleanExample(word.example)] : [];
   return `
     <div class="detail-title">
-      <h2>${escapeHtml(label)}</h2>
+      <h2>${escapeHtml(label)} <span class="pill status-${word.status}">${statusText(word.status)}</span></h2>
       ${renderTtsButton(label, `Озвучить ${label}`)}
     </div>
-    <p><span class="pill status-${word.status}">${statusText(word.status)}</span></p>
     ${translation ? `<p><strong>Перевод:</strong> ${escapeHtml(translation)}</p>` : ""}
     ${!isPhrase && transcription ? `<p><strong>Транскрипция:</strong> /${escapeHtml(transcription)}/</p>` : ""}
     ${examples.length ? `<div><strong>Пример в тексте:</strong><ul class="detail-examples">${examples.map((example) => `<li><span>${escapeHtml(example)}</span>${renderTtsButton(example, "Озвучить пример", "mini")}</li>`).join("")}</ul></div>` : ""}
@@ -697,7 +807,7 @@ function renderAnalysis() {
   state.analysisVisibleDocId = doc.id;
   const selected = cloud.selected;
   return `
-    ${renderHeader(escapeHtml(doc.title), "Результат анализа текста", `<a data-link href="/document/${doc.id}"><button>Текст</button></a>`)}
+    ${renderHeader(escapeHtml(doc.title), "Результат анализа текста", renderDocumentViewSwitch(doc.id, "analysis"))}
     <section class="card analysis-hero">
       <div class="ring" style="--value:${analysis.coverage_percent}"><strong>${analysis.coverage_percent}%</strong></div>
       <div>
@@ -762,10 +872,9 @@ function renderAnalysisDetail(item) {
   const transcription = cleanTranscription(item.transcription);
   return `
     <div class="detail-title">
-      <h2>${escapeHtml(item.label)}</h2>
+      <h2>${escapeHtml(item.label)} <span class="pill status-${item.status}">${statusText(item.status)}</span></h2>
       ${renderTtsButton(item.label, `Озвучить ${item.label}`)}
     </div>
-    <p><span class="pill status-${item.status}">${statusText(item.status)}</span></p>
     <p><strong>Частота в тексте:</strong> ${item.count}×</p>
     ${item.translation_ru ? `<p><strong>Перевод:</strong> ${escapeHtml(item.translation_ru)}</p>` : ""}
     ${item.kind === "word" && transcription ? `<p><strong>Транскрипция:</strong> /${escapeHtml(transcription)}/</p>` : ""}
@@ -872,10 +981,9 @@ function renderKnowledgeDetail(item) {
   const translationFailed = state.translationFailedIds.has(item.knowledge_id);
   return `
     <div class="detail-title">
-      <h2>${escapeHtml(item.text)}</h2>
+      <h2>${escapeHtml(item.text)} <span class="pill status-${item.status || "unknown"}">${statusText(item.status || "unknown")}</span></h2>
       ${renderTtsButton(item.text, `Озвучить ${item.text}`)}
     </div>
-    <p><span class="pill status-${item.status || "unknown"}">${statusText(item.status || "unknown")}</span></p>
     ${translation ? `<p><strong>Перевод:</strong> ${escapeHtml(translation)}</p>` : ""}
     ${!translation && translationLoading ? `<p class="subtle">Загружаю перевод...</p>` : ""}
     ${!translation && translationFailed ? `<p class="subtle">Перевод пока не найден.</p>` : ""}
@@ -1101,10 +1209,22 @@ function renderWords() {
   return `
     ${renderHeader("Общий словарь", `Знаю: ${words.length}`, "")}
     <section class="card">
-      <table class="table">
+      <table class="table desktop-table">
         <thead><tr><th>Слово</th><th>POS</th><th>Перевод</th><th>Транскрипция</th><th>Статус</th></tr></thead>
         <tbody>${visibleWords.map((item) => `<tr><td>${escapeHtml(item.label)}</td><td>${escapeHtml(item.part_of_speech)}</td><td>${escapeHtml(item.translation_ru || "")}</td><td>${cleanTranscription(item.transcription) ? `/${escapeHtml(cleanTranscription(item.transcription))}/` : ""}</td><td><span class="pill status-${item.status}">${statusText(item.status)}</span></td></tr>`).join("") || `<tr><td colspan="5"><div class="empty">Пока нет слов/фраз со статусом “знаю”.</div></td></tr>`}</tbody>
       </table>
+      <div class="mobile-card-list words-mobile-list">
+        ${visibleWords.map((item) => `
+          <article class="mobile-list-card word-mobile-card">
+            <div>
+              <h3>${escapeHtml(item.label)}</h3>
+              <p class="meta">${escapeHtml(item.part_of_speech)}${cleanTranscription(item.transcription) ? ` · /${escapeHtml(cleanTranscription(item.transcription))}/` : ""}</p>
+              ${item.translation_ru ? `<p>${escapeHtml(item.translation_ru)}</p>` : ""}
+            </div>
+            <span class="pill status-${item.status}">${statusText(item.status)}</span>
+          </article>
+        `).join("") || `<div class="empty">Пока нет слов/фраз со статусом “знаю”.</div>`}
+      </div>
       ${hasMoreWords ? `<div class="pagination-actions"><button data-words-next>Далее</button><span class="meta">Показано ${visibleWords.length} из ${words.length}</span></div>` : words.length ? `<p class="meta pagination-summary">Показано ${visibleWords.length} из ${words.length}</p>` : ""}
     </section>
   `;
@@ -1157,6 +1277,9 @@ function renderSettings() {
         <button type="button" data-tts-preview>▶ Проверить голос</button>
       </div>
       <button class="primary">Сохранить</button>
+      <div class="settings-account-actions">
+        <button type="button" class="ghost" data-logout>Выйти</button>
+      </div>
     </form>
   `;
 }
