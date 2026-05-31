@@ -1,9 +1,0 @@
-C:\Users\Yuri\AppData\Local\Programs\Python\Python311\Lib\site-packages\requests\__init__.py:113: RequestsDependencyWarning: urllib3 (2.6.3) or chardet (7.0.1)/charset_normalizer (3.4.5) doesn't match a supported version!
-  warnings.warn(
-INFO:     Started server process [18804]
-INFO:     Waiting for application startup.
-C:\Yuri\CODEX\LanguagePuzzle\app.py:838: RuntimeWarning: coroutine 'run_googletrans_translate.<locals>._translate' was never awaited
-  pass
-RuntimeWarning: Enable tracemalloc to get the object allocation traceback
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:3000 (Press CTRL+C to quit)
