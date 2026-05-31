@@ -86,7 +86,7 @@ def export_learn_block_anki(block_id: str, lp_session: str | None = Cookie(defau
         ]
         if not export_units:
             raise HTTPException(status_code=400, detail="В блоке нет неизученных слов для ANKI.")
-        text = build_learn_block_anki_text(block)
+        text = build_learn_block_anki_text(block, conn=conn, user=user)
         filename = anki_filename(block["title"])
         return StreamingResponse(
             iter([text.encode("utf-8-sig")]),

@@ -8,6 +8,7 @@ eng-to-ipa
 requests
 numpy
 wordfreq
+yookassa
 
 # dev / tests
 pytest

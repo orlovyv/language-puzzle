@@ -25,7 +25,29 @@ from app.services.vocabulary import (
     phrase_dictionary_translation,
     system_terms,
 )
+from app.services.llm import enrichment
+from app.services.llm.client import LLMUnavailable
 from app.utils.security import token_id
+
+
+def _ai_ranked_prepend(conn, user: dict[str, Any], topic: str, known_terms: set[str]) -> list[dict[str, Any]]:
+    """Premium: AI-curated topical words, shaped like kg_rank_related_words items.
+
+    Returns [] when AI is unavailable so the caller uses pure frequency ranking.
+    Score 1.0 ensures AI picks lead the ranked list.
+    """
+    try:
+        items = enrichment.ai_topic_vocabulary(conn, user, topic, sorted(known_terms))
+    except LLMUnavailable:
+        return []
+    ranked: list[dict[str, Any]] = []
+    for item in items:
+        word = kg_normalize_phrase(item["word"])
+        if not word or " " in word or word in known_terms:
+            continue
+        ranked.append({"word": word, "pos": "noun", "score": 1.0, "frequency": kg_wordfreq(word),
+                       "semantic": 1.0, "usefulness": 1.0})
+    return ranked
 
 try:
     import numpy as np
@@ -445,6 +467,10 @@ def build_kg_context(
         blocked_single_words=system_terms(conn, "kg_blocked_single_word"),
         blocked_entity_labels=system_terms(conn, "kg_blocked_entity_label"),
     )
+    # Premium: lead with AI-curated topical vocabulary; free path is unchanged.
+    ai_ranked = _ai_ranked_prepend(conn, user, topic, known_terms)
+    if ai_ranked:
+        ranked = ai_ranked + [item for item in ranked if item["word"] not in {a["word"] for a in ai_ranked}]
     units: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in ranked:

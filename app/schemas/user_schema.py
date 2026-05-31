@@ -71,3 +71,9 @@ class LearnBlockUpdatePayload(BaseModel):
 
 class LearnMergePayload(BaseModel):
     block_ids: list[str]
+
+
+class CheckoutPayload(BaseModel):
+    # Reserved for future plan selection; checkout currently uses the single
+    # configured subscription price.
+    plan: str | None = "premium"

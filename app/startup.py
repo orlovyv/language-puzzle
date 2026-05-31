@@ -149,3 +149,11 @@ def startup() -> None:
         import_wordnet_if_needed()
     backfill_unresolved_translations()
     backfill_word_transcriptions()
+    _expire_overdue_subscriptions()
+
+
+def _expire_overdue_subscriptions() -> None:
+    from app.services.billing.subscription_service import expire_overdue
+
+    with db() as conn:
+        expire_overdue(conn)

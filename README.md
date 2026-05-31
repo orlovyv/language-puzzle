@@ -110,4 +110,29 @@ C:\Users\Yuri\AppData\Local\Programs\Python\Python311\python.exe -m pytest
 ```
 
 Юнит-тесты в `tests/` покрывают чистую логику (scoring, очистка текста, Learn-блоки,
-модели) и не требуют PostgreSQL.
+модели, AI-обогащение и подписку) и не требуют PostgreSQL.
+
+## Premium-подписка и ИИ
+
+Платная подписка (Premium) включает улучшение качества через ИИ. Без ключей всё
+работает в бесплатном режиме (MUSE/Google/частотный Knowledge Graph) — ИИ и оплата
+деградируют молча.
+
+**ИИ через OpenRouter** (единый OpenAI-совместимый API). Premium-функции:
+
+- контекстные переводы слов/фраз (с учётом части речи и предложения);
+- сгенерированные примеры предложений с переводом;
+- AI-подбор тематической лексики в Knowledge Graph;
+- обогащённые Anki-карточки (мнемоники, синонимы, контекст).
+
+Все ответы ИИ кэшируются в таблице `ai_cache` (не платим за повторы), действуют
+дневные лимиты (`AI_DAILY_LIMIT_*`). Включается флагом `USE_AI_FEATURES=1` и ключом
+`OPENROUTER_API_KEY`.
+
+**Оплата через ЮKassa.** Эндпоинты `/api/billing/checkout`, `/api/billing/webhook`,
+`/api/billing/status`, `/api/billing/cancel`. Подписка активируется **только** по
+верифицированному вебхуку `payment.succeeded` (повторная выборка платежа из ЮKassa,
+идемпотентность по `payment.id`), а не по клиентскому редиректу. Ключи: `YOOKASSA_SHOP_ID`,
+`YOOKASSA_SECRET_KEY`, цена/период — `SUBSCRIPTION_PRICE_RUB` / `SUBSCRIPTION_PERIOD_DAYS`.
+
+Все ключи и флаги — в `.env` (см. `.env.example`).

@@ -14,6 +14,7 @@ import { renderKnowledge } from "./knowledge.js";
 import { renderLearn } from "./learn.js";
 import { renderWords } from "./words.js";
 import { renderSettings } from "./settings.js";
+import { renderBilling } from "./billing.js";
 import { renderLanding, renderHelp } from "./static.js";
 
 const app = document.querySelector("#app");
@@ -63,7 +64,7 @@ function navigationItems() {
 
 export function renderNavigationLinks(variant = "desktop") {
   return navigationItems()
-    .filter(([path]) => variant !== "mobile" || (path !== "/help" && path !== "/words"))
+    .filter(([path]) => variant !== "mobile" || !["/help", "/words", "/premium"].includes(path))
     .map(([path, label, icon, disabled]) => {
     const active = isNavigationItemActive(path);
     const content = variant === "mobile"
@@ -98,6 +99,7 @@ function renderRoute() {
   if (state.route === "/knowledge") return renderKnowledge();
   if (state.route === "/learn") return renderLearn();
   if (state.route === "/words") return renderWords();
+  if (state.route === "/premium") return renderBilling();
   if (state.route === "/help") return renderHelp();
   if (state.route === "/settings") return renderSettings();
   if (state.route.startsWith("/document/") && state.route.endsWith("/analysis")) return renderAnalysis();
