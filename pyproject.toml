@@ -1,0 +1,17 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# pycodestyle errors, pyflakes, isort, pyupgrade, bugbear
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",  # line length handled by formatter; many SQL strings are intentionally long
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]

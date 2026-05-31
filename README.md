@@ -29,12 +29,12 @@ PORT=3000
 APP_SECRET=change-me-local-secret
 ```
 
-Если пользователя из `DATABASE_URL` можно подключить к базе `postgres`, приложение попробует создать `language_puzzle` само. Таблицы приложение создаст при старте.
+Если пользователя из `DATABASE_URL` можно подключить к базе `postgres`, приложение попробует создать `language_puzzle` само. Схема накатывается миграциями из `migrations/*.sql` при старте (см. ниже).
 
-Демо-аккаунт:
+Демо-аккаунт (можно переопределить через `DEMO_EMAIL` / `DEMO_PASSWORD` в `.env`):
 
-- email: `demo@local`
-- password: `demo`
+- email: `demo@local.ru`
+- password: `123`
 
 ## Что реализовано
 
@@ -70,3 +70,44 @@ C:\Users\Yuri\AppData\Local\Programs\Python\Python311\python.exe -m pip install 
 
 Используется MUSE bilingual dictionary `data/dictionaries/muse-en-ru.txt`.
 При первом старте приложение загружает его в PostgreSQL-таблицу `muse_translations`, затем новые слова получают русский перевод из этой таблицы.
+
+## Архитектура
+
+Код разбит на слои (зависимости направлены сверху вниз):
+
+```
+app/
+├── core/            инфраструктура: пул соединений (database.py), запуск миграций (migrations.py)
+├── repositories/    доступ к БД — весь SQL живёт здесь, по одному модулю на агрегат
+├── services/        бизнес-логика:
+│   ├── text_processing.py   единственный экземпляр spaCy + очистка/токенизация текста
+│   ├── translation.py       цепочка переводов MUSE → Google → WordNet + IPA-транскрипция
+│   ├── vocabulary.py        системные термины, словарь фраз, детектор фраз
+│   ├── analysis.py          разбор документа, покрытие, пересчёт при смене статусов
+│   ├── knowledge_graph.py   Knowledge Graph mode (semantic + frequency)
+│   ├── learn.py             Learn-блоки и экспорт в Anki
+│   ├── auth_service.py      сессии, верификация e-mail, register/login
+│   ├── documents.py         валидация загрузки, сборка текста для чтения
+│   └── scoring.py           чистые эвристики ранжирования
+├── routes/          тонкие контроллеры FastAPI (по ресурсам)
+├── models/          pydantic-модели публичных структур
+├── schemas/         pydantic-схемы тел запросов
+└── startup.py       bootstrap: создать БД, миграции, сид демо-аккаунта, импорт словарей
+```
+
+Соединения берутся из пула `psycopg_pool` (см. `DB_POOL_MIN_SIZE` / `DB_POOL_MAX_SIZE`).
+
+### Миграции
+
+SQL-файлы в `migrations/` применяются по порядку имени один раз и фиксируются в таблице
+`schema_migrations`. Файлы идемпотентны (`IF NOT EXISTS` / `ON CONFLICT`), поэтому безопасны
+для уже существующих баз.
+
+## Тесты
+
+```powershell
+C:\Users\Yuri\AppData\Local\Programs\Python\Python311\python.exe -m pytest
+```
+
+Юнит-тесты в `tests/` покрывают чистую логику (scoring, очистка текста, Learn-блоки,
+модели) и не требуют PostgreSQL.

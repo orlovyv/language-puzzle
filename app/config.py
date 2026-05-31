@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
 WORDNET_ARCHIVE = BASE_DIR / "wn3.1.dict.tar.gz"
 MUSE_DICTIONARY = BASE_DIR / "data" / "dictionaries" / "muse-en-ru.txt"
+MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 
 def load_dotenv() -> None:
@@ -43,9 +44,14 @@ DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/language_puzzle",
 )
+DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "1"))
+DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
 APP_SECRET = os.getenv("APP_SECRET", "language-puzzle-dev")
 HOST = os.getenv("HOST", "0.0.0.0")
 PORT = int(os.getenv("PORT", "3000"))
+# Demo account seeded on startup. Override credentials via .env in real deployments.
+DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@local.ru")
+DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "123")
 SMTP_HOST = os.getenv("SMTP_HOST", "")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
