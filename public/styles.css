@@ -1952,3 +1952,16 @@ textarea {
     display: none;
   }
 }
+
+
+/* Mobile-only relocation of Help / Words / Desktop into Settings */
+.settings-menu-title { margin: 0 0 10px; font-size: 1rem; }
+.settings-menu { display: flex; flex-direction: column; gap: 8px; }
+.settings-menu-link {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px;
+  background: #fff; font: inherit; font-size: 1rem; color: inherit;
+  text-align: left; text-decoration: none; cursor: pointer;
+}
+.settings-menu-link:hover { background: rgba(0, 0, 0, 0.03); }
+.settings-menu-link .nav-icon { font-size: 1.1rem; }
