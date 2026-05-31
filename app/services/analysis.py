@@ -30,7 +30,17 @@ from app.services.translation import (
     wordnet_definition,
 )
 from app.services.vocabulary import detect_phrases, known_seed_terms, phrase_dictionary_translation
+from app.services.llm import enrichment
+from app.services.llm.client import LLMUnavailable
 from app.utils.security import token_id
+
+
+def _ai_translation(conn, user: dict[str, Any], text: str, pos: str | None = None, context: str | None = None) -> str:
+    """Premium AI translation, or "" if unavailable (caller falls back)."""
+    try:
+        return enrichment.ai_translate(conn, user, text, pos=pos, context=context)
+    except LLMUnavailable:
+        return ""
 
 
 def now() -> str:
@@ -343,7 +353,12 @@ def load_word_translation_on_demand(
     if has_resolved_translation(row.get("translation_ru")):
         return row
 
-    translation = clean_client_translation(translation_ru)
+    # Premium: prefer a context-aware AI translation; fall back to client value.
+    translation = _ai_translation(
+        conn, user, row.get("lemma", ""), pos=row.get("part_of_speech"), context=row.get("example")
+    )
+    if not translation:
+        translation = clean_client_translation(translation_ru)
     if translation:
         row = word_repository.update_word_translation(conn, row["id"], translation)
         rerun_user_analyses(conn, user)
@@ -370,6 +385,8 @@ def load_phrase_translation_on_demand(
         phrase_type=row.get("type"),
         language=row.get("language") or user.get("target_language") or "en",
     )
+    if not translation:
+        translation = _ai_translation(conn, user, phrase, pos=row.get("type"))
     if not translation:
         translation = clean_client_translation(translation_ru)
     if translation:

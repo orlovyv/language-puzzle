@@ -9,9 +9,17 @@ import { renderHeader } from "./shell.js";
 export function renderSettings() {
   const user = normalizeUser(state.user || {});
   const voices = ttsVoiceOptions(user.target_language);
+  const isPremium = Boolean(state.user?.is_premium);
+  const premiumBadge = isPremium
+    ? `<span class="pill known">Premium</span>`
+    : `<a data-link href="/premium"><button class="primary">Оформить Premium</button></a>`;
   return `
     ${renderHeader("Настройки", "Языки MVP и учетная запись.")}
-      ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu"><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
+      ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu"><a class="settings-menu-link" data-link href="/premium"><span class="nav-icon">★</span><span>Premium</span></a><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
+    <section class="card settings-card subscription-row">
+      <div><h2 class="settings-menu-title">Подписка</h2><p class="subtle">${isPremium ? "Premium активен — ИИ-функции включены." : "Бесплатный план."}</p></div>
+      <div class="toolbar">${premiumBadge}</div>
+    </section>
     <form class="card form" id="settingsForm">
       <label class="label">Email<input value="${escapeHtml(state.user.email)}" disabled></label>
       <div class="form-row">

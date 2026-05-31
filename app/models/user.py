@@ -22,4 +22,7 @@ class PublicUser(BaseModel):
     tts_rate: float = 1.0
     tts_pitch: float = 1.0
     tts_volume: float = 1.0
+    plan: str = "free"
+    premium_until: str | None = None
+    is_premium: bool = False
     created_at: str

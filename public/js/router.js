@@ -86,6 +86,8 @@ export async function loadRoute() {
     }
     if (state.route === "/dashboard") {
       state.dashboard = await api("/api/dashboard");
+    } else if (state.route === "/premium") {
+      state.billing = await api("/api/billing/status");
     } else if (state.route === "/words") {
       const { words, phrases } = await api("/api/words");
       state.words = [...(words || []), ...(phrases || [])];

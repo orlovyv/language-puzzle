@@ -17,6 +17,7 @@ export const routes = [
   ["/knowledge", "Knowledge", "◎"],
   ["/learn", "Learn", "◫"],
   ["/words", "Words", "≡"],
+  ["/premium", "Premium", "★"],
   ["/help", "Help", "?"],
   ["/settings", "Settings", "⚙"]
 ];
@@ -57,6 +58,8 @@ export const state = {
   translationLoadingIds: new Set(),
   translationFailedIds: new Set(),
   selectedKnowledgeKey: null,
+  billing: null,
+  billingLoading: false,
   ttsVoices: [],
   selectedWord: null,
   wordsVisibleCount: 100,

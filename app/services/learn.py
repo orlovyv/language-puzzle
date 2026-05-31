@@ -11,6 +11,8 @@ from typing import Any
 
 from app.repositories import phrase_repository, word_repository
 from app.services.translation import anki_example_translation
+from app.services.llm import enrichment
+from app.services.llm.client import LLMUnavailable
 
 VALID_FREQUENCY_FILTERS = {"20-80", "50-50", "all"}
 
@@ -173,7 +175,17 @@ def anki_filename(title: str) -> str:
     return (slug or "learn_block")[:80] + "_anki.txt"
 
 
-def build_learn_block_anki_text(block: dict[str, Any]) -> str:
+def _ai_anki_card(conn, user, text: str, translation: str, pos: str | None) -> dict[str, Any] | None:
+    """Premium AI card enrichment, or None if unavailable."""
+    if conn is None or user is None:
+        return None
+    try:
+        return enrichment.ai_anki_card(conn, user, text, translation, pos=pos)
+    except LLMUnavailable:
+        return None
+
+
+def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> str:
     units = [
         unit
         for unit in filter_learn_units_for_frequency(block.get("units") or [], block.get("frequency_filter") or "all")
@@ -213,6 +225,14 @@ def build_learn_block_anki_text(block: dict[str, Any]) -> str:
         example_translation = anki_example_translation(unit.get("example") or "")
         if example_translation:
             back_parts.append(f"<span style=\"color:#3b4b5c;\">Пример: {html.escape(example_translation)}</span>")
+        card = _ai_anki_card(conn, user, text, clean_export_translation(unit.get("translation_ru")), part_of_speech)
+        if card:
+            if card.get("synonyms"):
+                back_parts.append(f"<span style=\"color:#667085;\">Синонимы: {html.escape(', '.join(card['synonyms']))}</span>")
+            if card.get("mnemonic"):
+                back_parts.append(f"<span style=\"color:#3b4b5c;\">Мнемоника: {html.escape(card['mnemonic'])}</span>")
+            if card.get("context"):
+                back_parts.append(f"<span style=\"color:#3b4b5c;\">{html.escape(card['context'])}</span>")
         writer.writerow([front, "<br>".join(back_parts)])
 
     text = output.getvalue()

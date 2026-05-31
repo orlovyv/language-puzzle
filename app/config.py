@@ -63,3 +63,26 @@ EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "0").lower(
     "true",
     "yes",
 }
+
+
+def _flag(name: str, default: str = "0") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+
+
+# --- AI enrichment (OpenRouter) ---
+# Premium-only features degrade silently to the free path when disabled or
+# unconfigured.
+USE_AI_FEATURES = _flag("USE_AI_FEATURES", "0")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
+LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "20"))
+AI_DAILY_LIMIT_FREE = int(os.getenv("AI_DAILY_LIMIT_FREE", "0"))
+AI_DAILY_LIMIT_PREMIUM = int(os.getenv("AI_DAILY_LIMIT_PREMIUM", "300"))
+
+# --- Billing (YooKassa) ---
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
+YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+SUBSCRIPTION_PRICE_RUB = float(os.getenv("SUBSCRIPTION_PRICE_RUB", "299"))
+SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("SUBSCRIPTION_PERIOD_DAYS", "30"))
+SUBSCRIPTION_RETURN_URL = os.getenv("SUBSCRIPTION_RETURN_URL", "http://localhost:3000/settings")

@@ -29,6 +29,7 @@ export function bindRoute() {
   bindKnowledgeEvents();
   bindLearnEvents();
   bindSettingsEvents();
+  bindBillingEvents();
   restoreReaderScroll();
 }
 
@@ -452,6 +453,41 @@ function bindSettingsEvents() {
       tts_volume: form.querySelector("[name=tts_volume]")?.value,
     };
     speakText(text || "This is a voice preview.", tempSettings);
+  });
+}
+
+function bindBillingEvents() {
+  document.querySelector("[data-billing-checkout]")?.addEventListener("click", async () => {
+    state.billingLoading = true;
+    renderApp();
+    try {
+      const { confirmation_url } = await api("/api/billing/checkout", { method: "POST", body: {} });
+      if (confirmation_url) {
+        window.location.href = confirmation_url;
+        return;
+      }
+      state.message = "Не удалось создать платёж.";
+    } catch (error) {
+      state.message = error.message || "Оплата временно недоступна.";
+    } finally {
+      state.billingLoading = false;
+      renderApp();
+    }
+  });
+
+  document.querySelector("[data-billing-cancel]")?.addEventListener("click", async () => {
+    state.billingLoading = true;
+    renderApp();
+    try {
+      await api("/api/billing/cancel", { method: "POST" });
+      state.billing = await api("/api/billing/status");
+      state.message = "Автопродление отключено.";
+    } catch (error) {
+      state.message = error.message || "Не удалось отменить подписку.";
+    } finally {
+      state.billingLoading = false;
+      renderApp();
+    }
   });
 }
 

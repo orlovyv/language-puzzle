@@ -71,6 +71,10 @@ def send_verification_email(email: str, code: str) -> None:
 
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
+    # Imported here to avoid a circular import (billing -> auth_service).
+    from app.services.billing.subscription_service import is_premium
+
+    premium_until = user.get("premium_until")
     return {
         "id": user["id"],
         "email": user["email"],
@@ -81,6 +85,9 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "tts_rate": float(user.get("tts_rate") or 1),
         "tts_pitch": float(user.get("tts_pitch") or 1),
         "tts_volume": float(user.get("tts_volume") or 1),
+        "plan": user.get("plan", "free"),
+        "premium_until": str(premium_until) if premium_until else None,
+        "is_premium": is_premium(user),
         "created_at": str(user["created_at"]),
     }
 
@@ -104,6 +111,15 @@ def require_user(conn, lp_session: str | None, authorization: str | None) -> dic
     user = current_user(conn, lp_session, authorization)
     if not user:
         raise HTTPException(status_code=401, detail="Нужно войти.")
+    return user
+
+
+def require_premium(conn, lp_session: str | None, authorization: str | None) -> dict[str, Any]:
+    from app.services.billing.subscription_service import is_premium
+
+    user = require_user(conn, lp_session, authorization)
+    if not is_premium(user):
+        raise HTTPException(status_code=403, detail="Доступно по подписке.")
     return user
 
 

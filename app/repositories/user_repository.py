@@ -104,6 +104,52 @@ def update_user_settings(
 
 
 # ---------------------------------------------------------------------------
+# subscription
+# ---------------------------------------------------------------------------
+def set_subscription(
+    conn,
+    user_id: str,
+    plan: str,
+    premium_until: datetime | None,
+    auto_renew: bool,
+    payment_method_id: str | None = None,
+) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        """
+        update users set
+            plan=%s,
+            premium_until=%s,
+            subscription_auto_renew=%s,
+            yookassa_payment_method_id=coalesce(%s, yookassa_payment_method_id)
+        where id=%s
+        returning *
+        """,
+        (plan, premium_until, auto_renew, payment_method_id, user_id),
+    )
+
+
+def set_auto_renew(conn, user_id: str, auto_renew: bool) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update users set subscription_auto_renew=%s where id=%s returning *",
+        (auto_renew, user_id),
+    )
+
+
+def expire_overdue_subscriptions(conn) -> int:
+    """Downgrade users whose premium has lapsed. Returns affected row count."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            update users set plan='free', subscription_auto_renew=false
+            where plan='premium' and premium_until is not null and premium_until < now()
+            """
+        )
+        return cur.rowcount
+
+
+# ---------------------------------------------------------------------------
 # sessions
 # ---------------------------------------------------------------------------
 def create_session(conn, token: str, user_id: str) -> None:
