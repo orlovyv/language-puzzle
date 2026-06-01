@@ -26,4 +26,5 @@ class PublicUser(BaseModel):
     premium_until: str | None = None
     is_premium: bool = False
     must_change_password: bool = False
+    is_admin: bool = False
     created_at: str

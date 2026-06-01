@@ -14,6 +14,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.config import (
+    ADMIN_EMAILS,
     APP_SECRET,
     EMAIL_VERIFICATION_ENABLED,
     SMTP_FROM,
@@ -106,8 +107,15 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "premium_until": str(premium_until) if premium_until else None,
         "is_premium": is_premium(user),
         "must_change_password": bool(user.get("must_change_password", False)),
+        "is_admin": is_admin(user),
         "created_at": str(user["created_at"]),
     }
+
+
+def is_admin(user: dict[str, Any] | None) -> bool:
+    if not user:
+        return False
+    return normalize_email(user.get("email", "")) in ADMIN_EMAILS
 
 
 def _token_from(lp_session: str | None, authorization: str | None) -> str | None:
@@ -138,6 +146,13 @@ def require_premium(conn, lp_session: str | None, authorization: str | None) -> 
     user = require_user(conn, lp_session, authorization)
     if not is_premium(user):
         raise HTTPException(status_code=403, detail="Доступно по подписке.")
+    return user
+
+
+def require_admin(conn, lp_session: str | None, authorization: str | None) -> dict[str, Any]:
+    user = require_user(conn, lp_session, authorization)
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Доступ только для администратора.")
     return user
 
 
@@ -222,6 +237,8 @@ def login_user(conn, payload) -> dict[str, Any]:
     user = user_repository.find_user_by_credentials(conn, email, hash_password(payload.password))
     if not user:
         raise HTTPException(status_code=401, detail="Неверный email или пароль.")
+    if user.get("is_blocked"):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован.")
     if not user.get("email_verified", True):
         raise HTTPException(status_code=403, detail="Подтвердите email перед входом.")
     return {"user": user, "token": _start_session(conn, user)}

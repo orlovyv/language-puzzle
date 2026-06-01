@@ -74,6 +74,15 @@ export async function loadRoute() {
       state.dashboard = await api("/api/dashboard");
     } else if (state.route === "/premium") {
       state.billing = await api("/api/billing/status");
+    } else if (state.route === "/admin") {
+      const [{ stats }, users] = await Promise.all([
+        api("/api/admin/stats"),
+        api(`/api/admin/users?q=${encodeURIComponent(state.adminQuery || "")}`),
+      ]);
+      state.adminStats = stats;
+      state.adminUsers = users.users || [];
+      state.adminUsersTotal = users.total || 0;
+      state.adminSelectedUser = null;
     } else if (state.route === "/words") {
       const { words, phrases } = await api("/api/words");
       state.words = [...(words || []), ...(phrases || [])];

@@ -1978,3 +1978,15 @@ textarea {
 /* Auth: Turnstile widget + must-change banner */
 .turnstile-box { min-height: 65px; margin: 4px 0; }
 .must-change-banner { margin-bottom: 12px; }
+
+/* Admin panel */
+.admin-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+.admin-users .section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.admin-users #adminSearch { padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; min-width: 200px; }
+.admin-user-row { cursor: pointer; }
+.admin-user-row:hover { background: rgba(0,0,0,0.03); }
+.admin-actions { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.admin-action-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+.admin-actions[data-loading] { opacity: 0.6; pointer-events: none; }
+.mobile-mode .admin-layout, .mobile-mode .admin-stats { grid-template-columns: 1fr; }

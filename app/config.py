@@ -103,3 +103,11 @@ ROBOKASSA_PASSWORD1 = os.getenv("ROBOKASSA_PASSWORD1", "")
 ROBOKASSA_PASSWORD2 = os.getenv("ROBOKASSA_PASSWORD2", "")
 ROBOKASSA_IS_TEST = _flag("ROBOKASSA_IS_TEST", "1")
 ROBOKASSA_BASE_URL = os.getenv("ROBOKASSA_BASE_URL", "https://auth.robokassa.ru/Merchant/Index.aspx")
+
+# --- Admin access (email allowlist) ---
+# Comma-separated emails granted access to /api/admin/*. Empty => no admins.
+ADMIN_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}

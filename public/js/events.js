@@ -30,6 +30,7 @@ export function bindRoute() {
   bindLearnEvents();
   bindSettingsEvents();
   bindBillingEvents();
+  bindAdminEvents();
   restoreReaderScroll();
 }
 
@@ -502,6 +503,90 @@ function bindBillingEvents() {
       renderApp();
     }
   });
+}
+
+async function reloadAdminUsers() {
+  const data = await api(`/api/admin/users?q=${encodeURIComponent(state.adminQuery || "")}`);
+  state.adminUsers = data.users || [];
+  state.adminUsersTotal = data.total || 0;
+}
+
+async function adminAction(userId, fn) {
+  state.adminLoading = true;
+  renderApp();
+  try {
+    await fn();
+    await reloadAdminUsers();
+    const stats = await api("/api/admin/stats");
+    state.adminStats = stats.stats;
+  } catch (error) {
+    state.message = error.message || "Не удалось выполнить действие.";
+  } finally {
+    state.adminLoading = false;
+    renderApp();
+  }
+}
+
+function bindAdminEvents() {
+  const search = document.querySelector("#adminSearch");
+  if (search) {
+    search.addEventListener("change", async () => {
+      state.adminQuery = search.value.trim();
+      await reloadAdminUsers();
+      state.adminSelectedUser = null;
+      renderApp();
+    });
+  }
+
+  document.querySelectorAll("[data-admin-user]").forEach((row) => {
+    row.addEventListener("click", async () => {
+      try {
+        const { user } = await api(`/api/admin/users/${row.dataset.adminUser}`);
+        state.adminSelectedUser = user;
+      } catch (error) {
+        state.message = error.message;
+      }
+      renderApp();
+    });
+  });
+
+  const grant = document.querySelector("[data-admin-grant]");
+  grant?.addEventListener("click", () => {
+    const raw = document.querySelector("#adminPremiumUntil")?.value || "";
+    const premiumUntil = raw ? new Date(raw).toISOString() : null;
+    adminAction(grant.dataset.adminGrant, async () => {
+      const { user } = await api(`/api/admin/users/${grant.dataset.adminGrant}/subscription`,
+        { method: "PATCH", body: { plan: "premium", premium_until: premiumUntil } });
+      state.adminSelectedUser = user;
+    });
+  });
+
+  const revoke = document.querySelector("[data-admin-revoke]");
+  revoke?.addEventListener("click", () => adminAction(revoke.dataset.adminRevoke, async () => {
+    const { user } = await api(`/api/admin/users/${revoke.dataset.adminRevoke}/subscription`,
+      { method: "PATCH", body: { plan: "free" } });
+    state.adminSelectedUser = user;
+  }));
+
+  const block = document.querySelector("[data-admin-block]");
+  block?.addEventListener("click", () => adminAction(block.dataset.adminBlock, async () => {
+    const { user } = await api(`/api/admin/users/${block.dataset.adminBlock}/block`,
+      { method: "PATCH", body: { blocked: true } });
+    state.adminSelectedUser = user;
+  }));
+
+  const unblock = document.querySelector("[data-admin-unblock]");
+  unblock?.addEventListener("click", () => adminAction(unblock.dataset.adminUnblock, async () => {
+    const { user } = await api(`/api/admin/users/${unblock.dataset.adminUnblock}/block`,
+      { method: "PATCH", body: { blocked: false } });
+    state.adminSelectedUser = user;
+  }));
+
+  const reset = document.querySelector("[data-admin-reset]");
+  reset?.addEventListener("click", () => adminAction(reset.dataset.adminReset, async () => {
+    await api(`/api/admin/users/${reset.dataset.adminReset}/reset-password`, { method: "POST" });
+    state.message = "Временный пароль отправлен пользователю.";
+  }));
 }
 
 function restoreReaderScroll() {

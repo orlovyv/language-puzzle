@@ -122,6 +122,14 @@ def set_must_change(conn, user_id: str, value: bool) -> dict[str, Any] | None:
     )
 
 
+def set_blocked(conn, user_id: str, value: bool) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update users set is_blocked=%s where id=%s returning *",
+        (value, user_id),
+    )
+
+
 def delete_other_sessions(conn, user_id: str, keep_token: str | None = None) -> None:
     if keep_token:
         execute(conn, "delete from sessions where user_id=%s and token<>%s", (user_id, keep_token))

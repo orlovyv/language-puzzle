@@ -87,3 +87,12 @@ class PasswordResetRequestPayload(BaseModel):
 class PasswordChangePayload(BaseModel):
     current_password: str
     new_password: str
+
+
+class AdminSubscriptionPayload(BaseModel):
+    plan: str  # "premium" | "free"
+    premium_until: str | None = None  # ISO datetime, only for premium
+
+
+class AdminBlockPayload(BaseModel):
+    blocked: bool
