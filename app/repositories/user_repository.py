@@ -104,6 +104,40 @@ def update_user_settings(
 
 
 # ---------------------------------------------------------------------------
+# password
+# ---------------------------------------------------------------------------
+def update_password(conn, user_id: str, password_hash: str, must_change: bool) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update users set password_hash=%s, must_change_password=%s where id=%s returning *",
+        (password_hash, must_change, user_id),
+    )
+
+
+def set_must_change(conn, user_id: str, value: bool) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update users set must_change_password=%s where id=%s returning *",
+        (value, user_id),
+    )
+
+
+def set_blocked(conn, user_id: str, value: bool) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update users set is_blocked=%s where id=%s returning *",
+        (value, user_id),
+    )
+
+
+def delete_other_sessions(conn, user_id: str, keep_token: str | None = None) -> None:
+    if keep_token:
+        execute(conn, "delete from sessions where user_id=%s and token<>%s", (user_id, keep_token))
+    else:
+        execute(conn, "delete from sessions where user_id=%s", (user_id,))
+
+
+# ---------------------------------------------------------------------------
 # subscription
 # ---------------------------------------------------------------------------
 def set_subscription(

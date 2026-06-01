@@ -19,7 +19,8 @@ export const routes = [
   ["/words", "Words", "≡"],
   ["/premium", "Premium", "★"],
   ["/help", "Help", "?"],
-  ["/settings", "Settings", "⚙"]
+  ["/settings", "Settings", "⚙"],
+  ["/admin", "Admin", "⚑"]
 ];
 
 // Kept here (not in uimode.js) because it is evaluated while building `state`
@@ -60,6 +61,13 @@ export const state = {
   selectedKnowledgeKey: null,
   billing: null,
   billingLoading: false,
+  publicConfig: null,
+  adminStats: null,
+  adminUsers: [],
+  adminUsersTotal: 0,
+  adminQuery: "",
+  adminSelectedUser: null,
+  adminLoading: false,
   ttsVoices: [],
   selectedWord: null,
   wordsVisibleCount: 100,

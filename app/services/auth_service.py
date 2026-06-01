@@ -14,9 +14,11 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.config import (
+    ADMIN_EMAILS,
     APP_SECRET,
     EMAIL_VERIFICATION_ENABLED,
     SMTP_FROM,
+    SMTP_FROM_NAME,
     SMTP_HOST,
     SMTP_PASSWORD,
     SMTP_PORT,
@@ -24,6 +26,7 @@ from app.config import (
     SMTP_USERNAME,
 )
 from app.repositories import user_repository
+from app.services.captcha import verify_turnstile
 from app.utils.security import hash_password, token_id
 
 VERIFICATION_CODE_TTL_MINUTES = 15
@@ -46,20 +49,16 @@ def verification_code_hash(email: str, code: str) -> str:
     return hashlib.sha256(f"{APP_SECRET}:{normalize_email(email)}:{code}".encode()).hexdigest()
 
 
-def send_verification_email(email: str, code: str) -> None:
-    subject = "Language Puzzle verification code"
-    body = (
-        "Код подтверждения Language Puzzle: "
-        f"{code}\n\nОн действует {VERIFICATION_CODE_TTL_MINUTES} минут."
-    )
+def _send_email(to: str, subject: str, body: str) -> None:
+    """Send an email, or print to stdout when SMTP is not configured (dev)."""
     if not SMTP_HOST:
-        print(f"[Language Puzzle] Verification code for {email}: {code}")
+        print(f"[Language Puzzle] Email to {to} | {subject}\n{body}")
         return
 
     message = EmailMessage()
     message["Subject"] = subject
-    message["From"] = SMTP_FROM
-    message["To"] = email
+    message["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM}>" if SMTP_FROM_NAME else SMTP_FROM
+    message["To"] = to
     message.set_content(body)
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
@@ -68,6 +67,25 @@ def send_verification_email(email: str, code: str) -> None:
         if SMTP_USERNAME:
             smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
         smtp.send_message(message)
+
+
+def send_verification_email(email: str, code: str) -> None:
+    _send_email(
+        email,
+        "Код подтверждения Language Puzzle",
+        f"Ваш код подтверждения: {code}\n\nОн действует {VERIFICATION_CODE_TTL_MINUTES} минут.",
+    )
+
+
+def send_temporary_password_email(email: str, password: str) -> None:
+    _send_email(
+        email,
+        "Временный пароль Language Puzzle",
+        (
+            f"Ваш временный пароль: {password}\n\n"
+            "Войдите с ним и сразу смените пароль в настройках."
+        ),
+    )
 
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
@@ -88,8 +106,16 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "plan": user.get("plan", "free"),
         "premium_until": str(premium_until) if premium_until else None,
         "is_premium": is_premium(user),
+        "must_change_password": bool(user.get("must_change_password", False)),
+        "is_admin": is_admin(user),
         "created_at": str(user["created_at"]),
     }
+
+
+def is_admin(user: dict[str, Any] | None) -> bool:
+    if not user:
+        return False
+    return normalize_email(user.get("email", "")) in ADMIN_EMAILS
 
 
 def _token_from(lp_session: str | None, authorization: str | None) -> str | None:
@@ -123,6 +149,13 @@ def require_premium(conn, lp_session: str | None, authorization: str | None) -> 
     return user
 
 
+def require_admin(conn, lp_session: str | None, authorization: str | None) -> dict[str, Any]:
+    user = require_user(conn, lp_session, authorization)
+    if not is_admin(user):
+        raise HTTPException(status_code=403, detail="Доступ только для администратора.")
+    return user
+
+
 # ---------------------------------------------------------------------------
 # flows
 # ---------------------------------------------------------------------------
@@ -132,7 +165,9 @@ def _start_session(conn, user: dict[str, Any]) -> str:
     return token
 
 
-def register_user(conn, payload) -> dict[str, Any]:
+def register_user(conn, payload, remote_ip: str | None = None) -> dict[str, Any]:
+    if not verify_turnstile(getattr(payload, "captcha_token", None), remote_ip):
+        raise HTTPException(status_code=400, detail="Подтвердите, что вы не робот.")
     email = normalize_email(payload.email)
     if not is_valid_email(email):
         raise HTTPException(status_code=400, detail="Укажите корректный email.")
@@ -202,6 +237,8 @@ def login_user(conn, payload) -> dict[str, Any]:
     user = user_repository.find_user_by_credentials(conn, email, hash_password(payload.password))
     if not user:
         raise HTTPException(status_code=401, detail="Неверный email или пароль.")
+    if user.get("is_blocked"):
+        raise HTTPException(status_code=403, detail="Аккаунт заблокирован.")
     if not user.get("email_verified", True):
         raise HTTPException(status_code=403, detail="Подтвердите email перед входом.")
     return {"user": user, "token": _start_session(conn, user)}
@@ -210,3 +247,35 @@ def login_user(conn, payload) -> dict[str, Any]:
 def logout_session(conn, lp_session: str | None) -> None:
     if lp_session:
         user_repository.delete_session(conn, lp_session)
+
+
+# ---------------------------------------------------------------------------
+# password reset / change
+# ---------------------------------------------------------------------------
+def request_password_reset(conn, payload) -> dict[str, Any]:
+    """Email a temporary password if the account exists. Always returns the same
+    response so the endpoint never reveals whether an email is registered."""
+    email = normalize_email(payload.email)
+    if is_valid_email(email):
+        user = user_repository.find_user_by_email(conn, email)
+        if user:
+            temporary = secrets.token_urlsafe(9)
+            user_repository.update_password(conn, user["id"], hash_password(temporary), must_change=True)
+            # Force re-login everywhere with the new temporary password.
+            user_repository.delete_other_sessions(conn, user["id"])
+            send_temporary_password_email(email, temporary)
+    return {"ok": True}
+
+
+def change_password(conn, user: dict[str, Any], current_password: str, new_password: str, keep_token: str | None = None) -> dict[str, Any]:
+    if len(new_password or "") < 4:
+        raise HTTPException(status_code=400, detail="Пароль должен быть не короче 4 символов.")
+    verified = user_repository.find_user_by_credentials(
+        conn, normalize_email(user["email"]), hash_password(current_password or "")
+    )
+    if not verified:
+        raise HTTPException(status_code=400, detail="Текущий пароль неверный.")
+    updated = user_repository.update_password(conn, user["id"], hash_password(new_password), must_change=False)
+    # Invalidate other sessions; keep the current one logged in.
+    user_repository.delete_other_sessions(conn, user["id"], keep_token=keep_token)
+    return {"user": updated}

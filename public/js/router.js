@@ -7,16 +7,19 @@ import { initTtsVoices } from "./tts.js";
 import { renderApp } from "./views/shell.js";
 import { renderAuth, renderLanding, renderPublicHelp } from "./views/static.js";
 
+// Unauthenticated screens handled by renderAuth.
+const AUTH_ROUTES = new Set(["/login", "/register", "/reset"]);
+
 export async function boot() {
   try {
     const { user } = await api("/api/me");
     state.user = normalizeUser(user);
     initTtsVoices();
-    if (state.route === "/login" || state.route === "/register") await navigate("/dashboard");
+    if (AUTH_ROUTES.has(state.route)) await navigate("/dashboard");
     else if (state.route === "/") renderLanding();
     else await loadRoute();
   } catch {
-    if (state.route === "/login" || state.route === "/register") renderAuth();
+    if (AUTH_ROUTES.has(state.route)) renderAuth();
     else if (state.route === "/help") renderPublicHelp();
     else renderLanding();
   }
@@ -24,8 +27,18 @@ export async function boot() {
 
 export async function navigate(path) {
   window.history.pushState({}, "", path);
+  await routeTo({ replaceAuth: true });
+}
+
+export function handlePopState() {
+  routeTo({ replaceAuth: false });
+}
+
+// Shared guard logic for navigate() and back/forward. Returns once the correct
+// view has been rendered (or data loading kicked off).
+async function routeTo({ replaceAuth }) {
   state.route = window.location.pathname;
-  if (state.user && (state.route === "/login" || state.route === "/register")) {
+  if (state.user && AUTH_ROUTES.has(state.route)) {
     window.history.replaceState({}, "", "/dashboard");
     state.route = "/dashboard";
     await loadRoute();
@@ -41,40 +54,13 @@ export async function navigate(path) {
     renderPublicHelp();
     return;
   }
-  if (!state.user && (state.route === "/login" || state.route === "/register")) {
+  if (!state.user && AUTH_ROUTES.has(state.route)) {
     state.message = "";
     if (state.route !== "/register") state.pendingRegistrationEmail = "";
     renderAuth();
     return;
   }
   await loadRoute();
-}
-
-export function handlePopState() {
-  state.route = window.location.pathname;
-  if (state.user && (state.route === "/login" || state.route === "/register")) {
-    window.history.replaceState({}, "", "/dashboard");
-    state.route = "/dashboard";
-    loadRoute();
-    return;
-  }
-  if (!state.user && state.route === "/") {
-    state.message = "";
-    renderLanding();
-    return;
-  }
-  if (!state.user && state.route === "/help") {
-    state.message = "";
-    renderPublicHelp();
-    return;
-  }
-  if (!state.user && (state.route === "/login" || state.route === "/register")) {
-    state.message = "";
-    if (state.route !== "/register") state.pendingRegistrationEmail = "";
-    renderAuth();
-    return;
-  }
-  loadRoute();
 }
 
 export async function loadRoute() {
@@ -88,6 +74,15 @@ export async function loadRoute() {
       state.dashboard = await api("/api/dashboard");
     } else if (state.route === "/premium") {
       state.billing = await api("/api/billing/status");
+    } else if (state.route === "/admin") {
+      const [{ stats }, users] = await Promise.all([
+        api("/api/admin/stats"),
+        api(`/api/admin/users?q=${encodeURIComponent(state.adminQuery || "")}`),
+      ]);
+      state.adminStats = stats;
+      state.adminUsers = users.users || [];
+      state.adminUsersTotal = users.total || 0;
+      state.adminSelectedUser = null;
     } else if (state.route === "/words") {
       const { words, phrases } = await api("/api/words");
       state.words = [...(words || []), ...(phrases || [])];

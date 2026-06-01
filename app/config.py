@@ -25,6 +25,11 @@ def load_dotenv() -> None:
 
 load_dotenv()
 
+
+def _flag(name: str, default: str = "0") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+
+
 USE_WORDNET_FALLBACK = os.getenv("USE_WORDNET_FALLBACK", "0").lower() in {
     "1",
     "true",
@@ -57,17 +62,18 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "noreply@language-puzzle.local")
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Language Puzzle")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "1").lower() in {"1", "true", "yes"}
-EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "0").lower() in {
+EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "1").lower() in {
     "1",
     "true",
     "yes",
 }
 
-
-def _flag(name: str, default: str = "0") -> bool:
-    return os.getenv(name, default).lower() in {"1", "true", "yes"}
-
+# --- Cloudflare Turnstile ("я не робот"). Off => captcha check skipped ---
+USE_TURNSTILE = _flag("USE_TURNSTILE", "0")
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
 
 # --- AI enrichment (OpenRouter) ---
 # Premium-only features degrade silently to the free path when disabled or
@@ -80,9 +86,28 @@ LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "20"))
 AI_DAILY_LIMIT_FREE = int(os.getenv("AI_DAILY_LIMIT_FREE", "0"))
 AI_DAILY_LIMIT_PREMIUM = int(os.getenv("AI_DAILY_LIMIT_PREMIUM", "300"))
 
-# --- Billing (YooKassa) ---
-YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
-YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+# --- Billing ---
+# Active payment provider: "robokassa" (default) or "yookassa".
+PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "robokassa").strip().lower()
 SUBSCRIPTION_PRICE_RUB = float(os.getenv("SUBSCRIPTION_PRICE_RUB", "299"))
 SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("SUBSCRIPTION_PERIOD_DAYS", "30"))
 SUBSCRIPTION_RETURN_URL = os.getenv("SUBSCRIPTION_RETURN_URL", "http://localhost:3000/settings")
+
+# YooKassa (kept available, but inactive unless PAYMENT_PROVIDER=yookassa)
+YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
+YOOKASSA_SECRET_KEY = os.getenv("YOOKASSA_SECRET_KEY", "")
+
+# Robokassa
+ROBOKASSA_MERCHANT_LOGIN = os.getenv("ROBOKASSA_MERCHANT_LOGIN", "")
+ROBOKASSA_PASSWORD1 = os.getenv("ROBOKASSA_PASSWORD1", "")
+ROBOKASSA_PASSWORD2 = os.getenv("ROBOKASSA_PASSWORD2", "")
+ROBOKASSA_IS_TEST = _flag("ROBOKASSA_IS_TEST", "1")
+ROBOKASSA_BASE_URL = os.getenv("ROBOKASSA_BASE_URL", "https://auth.robokassa.ru/Merchant/Index.aspx")
+
+# --- Admin access (email allowlist) ---
+# Comma-separated emails granted access to /api/admin/*. Empty => no admins.
+ADMIN_EMAILS = {
+    email.strip().lower()
+    for email in os.getenv("ADMIN_EMAILS", "").split(",")
+    if email.strip()
+}

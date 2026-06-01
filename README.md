@@ -129,10 +129,38 @@ C:\Users\Yuri\AppData\Local\Programs\Python\Python311\python.exe -m pytest
 дневные лимиты (`AI_DAILY_LIMIT_*`). Включается флагом `USE_AI_FEATURES=1` и ключом
 `OPENROUTER_API_KEY`.
 
-**Оплата через ЮKassa.** Эндпоинты `/api/billing/checkout`, `/api/billing/webhook`,
-`/api/billing/status`, `/api/billing/cancel`. Подписка активируется **только** по
-верифицированному вебхуку `payment.succeeded` (повторная выборка платежа из ЮKassa,
-идемпотентность по `payment.id`), а не по клиентскому редиректу. Ключи: `YOOKASSA_SHOP_ID`,
-`YOOKASSA_SECRET_KEY`, цена/период — `SUBSCRIPTION_PRICE_RUB` / `SUBSCRIPTION_PERIOD_DAYS`.
+**Оплата.** Провайдер выбирается флагом `PAYMENT_PROVIDER` (`robokassa` по умолчанию,
+либо `yookassa`). Эндпоинты `/api/billing/checkout`, `/api/billing/status`,
+`/api/billing/cancel`. Подписка активируется **только** по верифицированному
+серверному колбэку, а не по клиентскому редиректу. Оба пути идемпотентны.
+
+- **Robokassa** (активна по умолчанию): чекаут отдаёт подписанный redirect-URL
+  (`md5(login:OutSum:InvId:Password1)`); Result URL `/api/billing/robokassa-result`
+  проверяет подпись `md5(OutSum:InvId:Password2)` и отвечает `OK{InvId}`. Ключи:
+  `ROBOKASSA_MERCHANT_LOGIN`, `ROBOKASSA_PASSWORD1`, `ROBOKASSA_PASSWORD2`,
+  `ROBOKASSA_IS_TEST`.
+- **ЮKassa** (оставлена, но неактивна): эндпоинт `/api/billing/webhook` обрабатывается
+  только при `PAYMENT_PROVIDER=yookassa`; подписка активируется по вебхуку
+  `payment.succeeded` с повторной выборкой платежа. Ключи: `YOOKASSA_SHOP_ID`,
+  `YOOKASSA_SECRET_KEY`.
+
+Цена/период — `SUBSCRIPTION_PRICE_RUB` / `SUBSCRIPTION_PERIOD_DAYS`. Без ключей
+активного провайдера чекаут отвечает 503.
 
 Все ключи и флаги — в `.env` (см. `.env.example`).
+
+## Регистрация и пароли
+
+- **Капча «я не робот»** при регистрации — Cloudflare Turnstile. Включается
+  `USE_TURNSTILE=1` + ключи `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY`. Cloudflare
+  даёт тестовые ключи, работающие без домена. Без ключей проверка пропускается.
+- **Подтверждение email 6-значным кодом** (`EMAIL_VERIFICATION_ENABLED=1`): пользователь
+  создаётся **только** после ввода верного кода (TTL 15 мин, 5 попыток).
+- **Восстановление пароля** (`/reset`): на почту отправляется временный пароль; после
+  входа им выставляется флаг `must_change_password`, и пользователю предлагается
+  сменить пароль в настройках. Эндпоинт всегда отвечает 200 (не раскрывает наличие аккаунта).
+- **Смена пароля** в настройках (`/api/password/change`): проверяет текущий пароль,
+  затем инвалидирует остальные сессии.
+
+Почта настраивается через `SMTP_*` в `.env`. Если `SMTP_HOST` пуст, коды и временные
+пароли печатаются в консоль (удобно для локальной разработки без почтового сервера).
