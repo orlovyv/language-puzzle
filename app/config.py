@@ -25,6 +25,11 @@ def load_dotenv() -> None:
 
 load_dotenv()
 
+
+def _flag(name: str, default: str = "0") -> bool:
+    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+
+
 USE_WORDNET_FALLBACK = os.getenv("USE_WORDNET_FALLBACK", "0").lower() in {
     "1",
     "true",
@@ -57,17 +62,18 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "noreply@language-puzzle.local")
+SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Language Puzzle")
 SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "1").lower() in {"1", "true", "yes"}
-EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "0").lower() in {
+EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "1").lower() in {
     "1",
     "true",
     "yes",
 }
 
-
-def _flag(name: str, default: str = "0") -> bool:
-    return os.getenv(name, default).lower() in {"1", "true", "yes"}
-
+# --- Cloudflare Turnstile ("я не робот"). Off => captcha check skipped ---
+USE_TURNSTILE = _flag("USE_TURNSTILE", "0")
+TURNSTILE_SITE_KEY = os.getenv("TURNSTILE_SITE_KEY", "")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
 
 # --- AI enrichment (OpenRouter) ---
 # Premium-only features degrade silently to the free path when disabled or

@@ -2,18 +2,27 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Cookie, Header, Response
+from fastapi import APIRouter, Cookie, Header, Request, Response
 
+from app.config import TURNSTILE_SITE_KEY
 from app.core.database import db
-from app.schemas.user_schema import AuthPayload, VerifyRegistrationPayload
+from app.schemas.user_schema import (
+    AuthPayload,
+    PasswordChangePayload,
+    PasswordResetRequestPayload,
+    VerifyRegistrationPayload,
+)
 from app.services.auth_service import (
+    change_password,
     login_user,
     logout_session,
     public_user,
     register_user,
+    request_password_reset,
     require_user,
     verify_registration,
 )
+from app.services.captcha import is_enabled as is_turnstile_enabled
 
 router = APIRouter()
 
@@ -25,9 +34,9 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 
 @router.post("/api/register")
-def register(payload: AuthPayload, response: Response):
+def register(payload: AuthPayload, request: Request, response: Response):
     with db() as conn:
-        result = register_user(conn, payload)
+        result = register_user(conn, payload, remote_ip=request.client.host if request.client else None)
     if result.get("requires_verification"):
         response.delete_cookie(_SESSION_COOKIE)
         return {"requires_verification": True, "email": result["email"]}
@@ -63,3 +72,32 @@ def logout(response: Response, lp_session: str | None = Cookie(default=None)):
 def me(lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
     with db() as conn:
         return {"user": public_user(require_user(conn, lp_session, authorization))}
+
+
+@router.get("/api/config")
+def public_config():
+    """Public client config (safe to expose): captcha site key."""
+    return {
+        "turnstile_enabled": is_turnstile_enabled(),
+        "turnstile_site_key": TURNSTILE_SITE_KEY,
+    }
+
+
+@router.post("/api/password/reset-request")
+def password_reset_request(payload: PasswordResetRequestPayload):
+    with db() as conn:
+        return request_password_reset(conn, payload)
+
+
+@router.post("/api/password/change")
+def password_change(
+    payload: PasswordChangePayload,
+    lp_session: str | None = Cookie(default=None),
+    authorization: str | None = Header(default=None),
+):
+    with db() as conn:
+        user = require_user(conn, lp_session, authorization)
+        result = change_password(
+            conn, user, payload.current_password, payload.new_password, keep_token=lp_session
+        )
+        return {"user": public_user(result["user"])}

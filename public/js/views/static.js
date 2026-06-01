@@ -6,49 +6,124 @@ import { state } from "../state.js";
 import { escapeHtml, isValidEmail, normalizeUser } from "../utils.js";
 import { initTtsVoices } from "../tts.js";
 import { navigate } from "../router.js";
+import { renderApp } from "./shell.js";
 
 const app = document.querySelector("#app");
 
+let turnstileToken = "";
+
+async function loadPublicConfig() {
+  if (state.publicConfig) return state.publicConfig;
+  try {
+    state.publicConfig = await api("/api/config");
+  } catch {
+    state.publicConfig = { turnstile_enabled: false, turnstile_site_key: "" };
+  }
+  return state.publicConfig;
+}
+
+function mountTurnstile() {
+  const cfg = state.publicConfig;
+  if (!cfg?.turnstile_enabled || !cfg.turnstile_site_key) return;
+  const container = document.querySelector("#turnstileBox");
+  if (!container) return;
+  const render = () => window.turnstile?.render(container, {
+    sitekey: cfg.turnstile_site_key,
+    callback: (token) => { turnstileToken = token; },
+  });
+  if (window.turnstile) {
+    render();
+  } else if (!document.querySelector("#turnstileScript")) {
+    const script = document.createElement("script");
+    script.id = "turnstileScript";
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+    script.async = true;
+    script.defer = true;
+    script.onload = render;
+    document.head.appendChild(script);
+  }
+}
+
 export function renderAuth() {
+  const isReset = state.route === "/reset";
   const isRegister = state.route === "/register";
   const isVerification = isRegister && state.pendingRegistrationEmail;
+  const heading = isReset ? "Восстановление пароля" : isVerification ? "Подтвердите email" : isRegister ? "Регистрация" : "Вход";
+  const subtitle = isReset
+    ? "Укажите email — пришлём временный пароль."
+    : isVerification
+      ? `Мы отправили код на ${escapeHtml(state.pendingRegistrationEmail)}.`
+      : isRegister
+        ? "Введите email и пароль, чтобы создать аккаунт."
+        : "Войдите по email и паролю.";
+
+  let formInner;
+  if (isReset) {
+    formInner = `
+      <label class="label">Email<input name="email" type="email" autocomplete="email" inputmode="email" required autofocus></label>
+      <button class="primary" type="submit">Отправить временный пароль</button>`;
+  } else if (isVerification) {
+    formInner = `
+      <label class="label">Код из письма<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required autofocus></label>
+      <button class="primary" type="submit">Подтвердить и войти</button>
+      <button class="ghost" type="button" id="changeEmailBtn">Изменить email</button>`;
+  } else {
+    formInner = `
+      <label class="label">Email<input name="email" type="email" autocomplete="email" inputmode="email" pattern="[^\\s@]+@[^\\s@]+\\.[^\\s@]+" required></label>
+      <label class="label">Пароль<input name="password" type="password" autocomplete="${isRegister ? "new-password" : "current-password"}" required></label>
+      ${isRegister ? `<div id="turnstileBox" class="turnstile-box"></div>` : ""}
+      <button class="primary" type="submit">${isRegister ? "Создать аккаунт" : "Войти"}</button>`;
+  }
+
+  const footerLink = isReset
+    ? `<a data-link href="/login">Вернуться ко входу</a>`
+    : isRegister
+      ? `Уже есть аккаунт? <a data-link href="/login">Войти</a>`
+      : `Нужен аккаунт? <a data-link href="/register">Зарегистрироваться</a>`;
+  const forgotLink = (!isRegister && !isReset && !isVerification)
+    ? `<p><a data-link href="/reset">Забыли пароль?</a></p>`
+    : "";
+
   app.innerHTML = `
     <main class="auth">
       <a class="auth-home" data-link href="/">Language Puzzle</a>
       <section class="card auth-card">
-        <h1>${isVerification ? "Подтвердите email" : isRegister ? "Регистрация" : "Вход"}</h1>
-        <p class="subtle">${
-          isVerification
-            ? `Мы отправили код на ${escapeHtml(state.pendingRegistrationEmail)}.`
-            : isRegister
-              ? "Введите email и пароль, чтобы создать аккаунт."
-              : "Войдите по email и паролю."
-        }</p>
-        <form class="form" id="authForm">
-          ${isVerification ? `
-            <label class="label">Код из письма<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required autofocus></label>
-            <button class="primary" type="submit">Подтвердить и войти</button>
-            <button class="ghost" type="button" id="changeEmailBtn">Изменить email</button>
-          ` : `
-            <label class="label">Email<input name="email" type="email" autocomplete="email" inputmode="email" pattern="[^\\s@]+@[^\\s@]+\\.[^\\s@]+" required></label>
-            <label class="label">Пароль<input name="password" type="password" autocomplete="${isRegister ? "new-password" : "current-password"}" required></label>
-            <button class="primary" type="submit">${isRegister ? "Создать аккаунт" : "Войти"}</button>
-          `}
-        </form>
-        <p>${isRegister ? "Уже есть аккаунт?" : "Нужен аккаунт?"} <a data-link href="${isRegister ? "/login" : "/register"}">${isRegister ? "Войти" : "Зарегистрироваться"}</a></p>
+        <h1>${heading}</h1>
+        <p class="subtle">${subtitle}</p>
+        <form class="form" id="authForm">${formInner}</form>
+        ${forgotLink}
+        <p>${footerLink}</p>
         ${state.message ? `<p class="notice">${escapeHtml(state.message)}</p>` : ""}
       </section>
     </main>
   `;
+
+  if (isRegister) {
+    turnstileToken = "";
+    loadPublicConfig().then(() => mountTurnstile());
+  }
+
   document.querySelector("#changeEmailBtn")?.addEventListener("click", () => {
     state.pendingRegistrationEmail = "";
     state.message = "";
     renderAuth();
   });
+
   document.querySelector("#authForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = Object.fromEntries(new FormData(event.currentTarget));
     try {
+      if (isReset) {
+        if (!isValidEmail(form.email)) {
+          state.message = "Введите корректный email.";
+          renderAuth();
+          return;
+        }
+        await api("/api/password/reset-request", { method: "POST", body: { email: form.email } });
+        state.message = "Если email зарегистрирован, мы отправили временный пароль.";
+        renderAuth();
+        return;
+      }
       if (isVerification) {
         const { user } = await api("/api/register/verify", {
           method: "POST",
@@ -68,6 +143,7 @@ export function renderAuth() {
       if (isRegister) {
         form.native_language = "ru";
         form.target_language = "en";
+        form.captcha_token = turnstileToken;
       }
       const result = await api(isRegister ? "/api/register" : "/api/login", { method: "POST", body: form });
       if (result.requires_verification) {
@@ -79,7 +155,11 @@ export function renderAuth() {
       const { user } = result;
       state.user = normalizeUser(user);
       initTtsVoices();
-      await navigate("/dashboard");
+      await navigate(user.must_change_password ? "/settings" : "/dashboard");
+      if (user.must_change_password) {
+        state.message = "Войдено по временному паролю. Смените пароль в настройках.";
+        renderApp();
+      }
     } catch (error) {
       state.message = error.message;
       renderAuth();

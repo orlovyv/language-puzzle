@@ -454,6 +454,19 @@ function bindSettingsEvents() {
     };
     speakText(text || "This is a voice preview.", tempSettings);
   });
+
+  document.querySelector("#passwordForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const data = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      const { user } = await api("/api/password/change", { method: "POST", body: data });
+      state.user = normalizeUser(user);
+      state.message = "Пароль изменён.";
+    } catch (error) {
+      state.message = error.message || "Не удалось сменить пароль.";
+    }
+    renderApp();
+  });
 }
 
 function bindBillingEvents() {

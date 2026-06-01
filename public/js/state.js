@@ -60,6 +60,7 @@ export const state = {
   selectedKnowledgeKey: null,
   billing: null,
   billingLoading: false,
+  publicConfig: null,
   ttsVoices: [],
   selectedWord: null,
   wordsVisibleCount: 100,

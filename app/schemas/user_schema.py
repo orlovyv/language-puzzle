@@ -8,6 +8,7 @@ class AuthPayload(BaseModel):
     password: str
     native_language: str | None = "ru"
     target_language: str | None = "en"
+    captcha_token: str | None = None
 
 
 class VerifyRegistrationPayload(BaseModel):
@@ -77,3 +78,12 @@ class CheckoutPayload(BaseModel):
     # Reserved for future plan selection; checkout currently uses the single
     # configured subscription price.
     plan: str | None = "premium"
+
+
+class PasswordResetRequestPayload(BaseModel):
+    email: str
+
+
+class PasswordChangePayload(BaseModel):
+    current_password: str
+    new_password: str

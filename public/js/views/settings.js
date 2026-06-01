@@ -10,11 +10,13 @@ export function renderSettings() {
   const user = normalizeUser(state.user || {});
   const voices = ttsVoiceOptions(user.target_language);
   const isPremium = Boolean(state.user?.is_premium);
+  const mustChange = Boolean(state.user?.must_change_password);
   const premiumBadge = isPremium
     ? `<span class="pill known">Premium</span>`
     : `<a data-link href="/premium"><button class="primary">Оформить Premium</button></a>`;
   return `
     ${renderHeader("Настройки", "Языки MVP и учетная запись.")}
+    ${mustChange ? `<section class="card notice must-change-banner">Вы вошли по временному паролю. Смените его ниже.</section>` : ""}
       ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu"><a class="settings-menu-link" data-link href="/premium"><span class="nav-icon">★</span><span>Premium</span></a><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
     <section class="card settings-card subscription-row">
       <div><h2 class="settings-menu-title">Подписка</h2><p class="subtle">${isPremium ? "Premium активен — ИИ-функции включены." : "Бесплатный план."}</p></div>
@@ -65,6 +67,12 @@ export function renderSettings() {
       <div class="settings-account-actions">
         <button type="button" class="ghost" data-logout>Выйти</button>
       </div>
+    </form>
+    <form class="card form" id="passwordForm">
+      <h2 class="settings-menu-title">Смена пароля</h2>
+      <label class="label">Текущий пароль<input name="current_password" type="password" autocomplete="current-password" required></label>
+      <label class="label">Новый пароль<input name="new_password" type="password" autocomplete="new-password" minlength="4" required></label>
+      <button class="primary">Сменить пароль</button>
     </form>
   `;
 }

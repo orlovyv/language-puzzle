@@ -25,4 +25,5 @@ class PublicUser(BaseModel):
     plan: str = "free"
     premium_until: str | None = None
     is_premium: bool = False
+    must_change_password: bool = False
     created_at: str
