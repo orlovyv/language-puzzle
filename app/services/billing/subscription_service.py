@@ -48,6 +48,7 @@ def activate_subscription(
     user: dict[str, Any],
     period_days: int | None = None,
     payment_method_id: str | None = None,
+    auto_renew: bool = True,
 ) -> dict[str, Any] | None:
     period = period_days or SUBSCRIPTION_PERIOD_DAYS
     premium_until = _extend_from(user, period)
@@ -56,7 +57,7 @@ def activate_subscription(
         user["id"],
         plan="premium",
         premium_until=premium_until,
-        auto_renew=True,
+        auto_renew=auto_renew,
         payment_method_id=payment_method_id,
     )
 

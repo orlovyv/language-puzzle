@@ -11,32 +11,46 @@ def insert_payment(
     conn,
     payment_id: str,
     user_id: str,
-    yookassa_id: str | None,
+    provider_id: str | None,
     amount: float,
     currency: str,
     status: str,
     period_days: int,
+    provider: str = "yookassa",
 ) -> dict[str, Any]:
+    # ``yookassa_id`` is the generic provider payment/invoice id column.
     return query_one(
         conn,
         """
-        insert into payments (id, user_id, yookassa_id, amount, currency, status, period_days)
-        values (%s, %s, %s, %s, %s, %s, %s)
+        insert into payments (id, user_id, yookassa_id, amount, currency, status, period_days, provider)
+        values (%s, %s, %s, %s, %s, %s, %s, %s)
         returning *
         """,
-        (payment_id, user_id, yookassa_id, amount, currency, status, period_days),
+        (payment_id, user_id, provider_id, amount, currency, status, period_days, provider),
     )
 
 
-def find_by_yookassa_id(conn, yookassa_id: str) -> dict[str, Any] | None:
-    return query_one(conn, "select * from payments where yookassa_id=%s", (yookassa_id,))
+def find_by_provider_id(conn, provider_id: str) -> dict[str, Any] | None:
+    return query_one(conn, "select * from payments where yookassa_id=%s", (provider_id,))
 
 
-def update_status(conn, yookassa_id: str, status: str) -> dict[str, Any] | None:
+def find_by_id(conn, payment_id: str) -> dict[str, Any] | None:
+    return query_one(conn, "select * from payments where id=%s", (payment_id,))
+
+
+def update_status(conn, provider_id: str, status: str) -> dict[str, Any] | None:
     return query_one(
         conn,
         "update payments set status=%s, updated_at=now() where yookassa_id=%s returning *",
-        (status, yookassa_id),
+        (status, provider_id),
+    )
+
+
+def update_status_by_id(conn, payment_id: str, status: str) -> dict[str, Any] | None:
+    return query_one(
+        conn,
+        "update payments set status=%s, updated_at=now() where id=%s returning *",
+        (status, payment_id),
     )
 
 

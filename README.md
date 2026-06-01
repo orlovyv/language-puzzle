@@ -129,11 +129,23 @@ C:\Users\Yuri\AppData\Local\Programs\Python\Python311\python.exe -m pytest
 дневные лимиты (`AI_DAILY_LIMIT_*`). Включается флагом `USE_AI_FEATURES=1` и ключом
 `OPENROUTER_API_KEY`.
 
-**Оплата через ЮKassa.** Эндпоинты `/api/billing/checkout`, `/api/billing/webhook`,
-`/api/billing/status`, `/api/billing/cancel`. Подписка активируется **только** по
-верифицированному вебхуку `payment.succeeded` (повторная выборка платежа из ЮKassa,
-идемпотентность по `payment.id`), а не по клиентскому редиректу. Ключи: `YOOKASSA_SHOP_ID`,
-`YOOKASSA_SECRET_KEY`, цена/период — `SUBSCRIPTION_PRICE_RUB` / `SUBSCRIPTION_PERIOD_DAYS`.
+**Оплата.** Провайдер выбирается флагом `PAYMENT_PROVIDER` (`robokassa` по умолчанию,
+либо `yookassa`). Эндпоинты `/api/billing/checkout`, `/api/billing/status`,
+`/api/billing/cancel`. Подписка активируется **только** по верифицированному
+серверному колбэку, а не по клиентскому редиректу. Оба пути идемпотентны.
+
+- **Robokassa** (активна по умолчанию): чекаут отдаёт подписанный redirect-URL
+  (`md5(login:OutSum:InvId:Password1)`); Result URL `/api/billing/robokassa-result`
+  проверяет подпись `md5(OutSum:InvId:Password2)` и отвечает `OK{InvId}`. Ключи:
+  `ROBOKASSA_MERCHANT_LOGIN`, `ROBOKASSA_PASSWORD1`, `ROBOKASSA_PASSWORD2`,
+  `ROBOKASSA_IS_TEST`.
+- **ЮKassa** (оставлена, но неактивна): эндпоинт `/api/billing/webhook` обрабатывается
+  только при `PAYMENT_PROVIDER=yookassa`; подписка активируется по вебхуку
+  `payment.succeeded` с повторной выборкой платежа. Ключи: `YOOKASSA_SHOP_ID`,
+  `YOOKASSA_SECRET_KEY`.
+
+Цена/период — `SUBSCRIPTION_PRICE_RUB` / `SUBSCRIPTION_PERIOD_DAYS`. Без ключей
+активного провайдера чекаут отвечает 503.
 
 Все ключи и флаги — в `.env` (см. `.env.example`).
 
