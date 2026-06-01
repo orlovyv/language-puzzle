@@ -27,7 +27,30 @@ load_dotenv()
 
 
 def _flag(name: str, default: str = "0") -> bool:
-    return os.getenv(name, default).lower() in {"1", "true", "yes"}
+    return (os.getenv(name) or default).lower() in {"1", "true", "yes"}
+
+
+def _int(name: str, default: int) -> int:
+    """int from env, falling back to default for unset/empty/invalid values."""
+    raw = (os.getenv(name) or "").strip()
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def _float(name: str, default: float) -> float:
+    raw = (os.getenv(name) or "").strip()
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _str(name: str, default: str) -> str:
+    """str from env, falling back to default for unset/empty values."""
+    value = os.getenv(name)
+    return value if value not in (None, "") else default
 
 
 USE_WORDNET_FALLBACK = os.getenv("USE_WORDNET_FALLBACK", "0").lower() in {
@@ -45,30 +68,26 @@ USE_IPA_TRANSCRIPTION = os.getenv("USE_IPA_TRANSCRIPTION", "1").lower() in {
     "true",
     "yes",
 }
-DATABASE_URL = os.getenv(
+DATABASE_URL = _str(
     "DATABASE_URL",
     "postgresql://postgres:postgres@localhost:5432/language_puzzle",
 )
-DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "1"))
-DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "10"))
-APP_SECRET = os.getenv("APP_SECRET", "language-puzzle-dev")
-HOST = os.getenv("HOST", "0.0.0.0")
-PORT = int(os.getenv("PORT", "3000"))
+DB_POOL_MIN_SIZE = _int("DB_POOL_MIN_SIZE", 1)
+DB_POOL_MAX_SIZE = _int("DB_POOL_MAX_SIZE", 10)
+APP_SECRET = _str("APP_SECRET", "language-puzzle-dev")
+HOST = _str("HOST", "0.0.0.0")
+PORT = _int("PORT", 3000)
 # Demo account seeded on startup. Override credentials via .env in real deployments.
-DEMO_EMAIL = os.getenv("DEMO_EMAIL", "demo@local.ru")
-DEMO_PASSWORD = os.getenv("DEMO_PASSWORD", "123")
+DEMO_EMAIL = _str("DEMO_EMAIL", "demo@local.ru")
+DEMO_PASSWORD = _str("DEMO_PASSWORD", "123")
 SMTP_HOST = os.getenv("SMTP_HOST", "")
-SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_PORT = _int("SMTP_PORT", 587)
 SMTP_USERNAME = os.getenv("SMTP_USERNAME", "")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USERNAME or "noreply@language-puzzle.local")
-SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "Language Puzzle")
-SMTP_USE_TLS = os.getenv("SMTP_USE_TLS", "1").lower() in {"1", "true", "yes"}
-EMAIL_VERIFICATION_ENABLED = os.getenv("EMAIL_VERIFICATION_ENABLED", "1").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+SMTP_FROM = _str("SMTP_FROM", SMTP_USERNAME or "noreply@language-puzzle.local")
+SMTP_FROM_NAME = _str("SMTP_FROM_NAME", "Language Puzzle")
+SMTP_USE_TLS = _flag("SMTP_USE_TLS", "1")
+EMAIL_VERIFICATION_ENABLED = _flag("EMAIL_VERIFICATION_ENABLED", "1")
 
 # --- Cloudflare Turnstile ("я не робот"). Off => captcha check skipped ---
 USE_TURNSTILE = _flag("USE_TURNSTILE", "0")
@@ -80,18 +99,18 @@ TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
 # unconfigured.
 USE_AI_FEATURES = _flag("USE_AI_FEATURES", "0")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENROUTER_BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
-LLM_MODEL = os.getenv("LLM_MODEL", "openai/gpt-4o-mini")
-LLM_TIMEOUT = float(os.getenv("LLM_TIMEOUT", "20"))
-AI_DAILY_LIMIT_FREE = int(os.getenv("AI_DAILY_LIMIT_FREE", "0"))
-AI_DAILY_LIMIT_PREMIUM = int(os.getenv("AI_DAILY_LIMIT_PREMIUM", "300"))
+OPENROUTER_BASE_URL = _str("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+LLM_MODEL = _str("LLM_MODEL", "openai/gpt-4o-mini")
+LLM_TIMEOUT = _float("LLM_TIMEOUT", 20)
+AI_DAILY_LIMIT_FREE = _int("AI_DAILY_LIMIT_FREE", 0)
+AI_DAILY_LIMIT_PREMIUM = _int("AI_DAILY_LIMIT_PREMIUM", 300)
 
 # --- Billing ---
 # Active payment provider: "robokassa" (default) or "yookassa".
-PAYMENT_PROVIDER = os.getenv("PAYMENT_PROVIDER", "robokassa").strip().lower()
-SUBSCRIPTION_PRICE_RUB = float(os.getenv("SUBSCRIPTION_PRICE_RUB", "299"))
-SUBSCRIPTION_PERIOD_DAYS = int(os.getenv("SUBSCRIPTION_PERIOD_DAYS", "30"))
-SUBSCRIPTION_RETURN_URL = os.getenv("SUBSCRIPTION_RETURN_URL", "http://localhost:3000/settings")
+PAYMENT_PROVIDER = _str("PAYMENT_PROVIDER", "robokassa").strip().lower()
+SUBSCRIPTION_PRICE_RUB = _float("SUBSCRIPTION_PRICE_RUB", 299)
+SUBSCRIPTION_PERIOD_DAYS = _int("SUBSCRIPTION_PERIOD_DAYS", 30)
+SUBSCRIPTION_RETURN_URL = _str("SUBSCRIPTION_RETURN_URL", "http://localhost:3000/settings")
 
 # YooKassa (kept available, but inactive unless PAYMENT_PROVIDER=yookassa)
 YOOKASSA_SHOP_ID = os.getenv("YOOKASSA_SHOP_ID", "")
@@ -102,7 +121,7 @@ ROBOKASSA_MERCHANT_LOGIN = os.getenv("ROBOKASSA_MERCHANT_LOGIN", "")
 ROBOKASSA_PASSWORD1 = os.getenv("ROBOKASSA_PASSWORD1", "")
 ROBOKASSA_PASSWORD2 = os.getenv("ROBOKASSA_PASSWORD2", "")
 ROBOKASSA_IS_TEST = _flag("ROBOKASSA_IS_TEST", "1")
-ROBOKASSA_BASE_URL = os.getenv("ROBOKASSA_BASE_URL", "https://auth.robokassa.ru/Merchant/Index.aspx")
+ROBOKASSA_BASE_URL = _str("ROBOKASSA_BASE_URL", "https://auth.robokassa.ru/Merchant/Index.aspx")
 
 # --- Admin access (email allowlist) ---
 # Comma-separated emails granted access to /api/admin/*. Empty => no admins.
