@@ -61,7 +61,42 @@ def test_reset_success_rotates_password(client, monkeypatch):
 
 def test_send_email_wraps_smtp_errors(monkeypatch):
     # _send_email must raise EmailDeliveryError (not a raw OSError) on connect failure.
+    monkeypatch.setattr(auth_service, "BREVO_API_KEY", "")
     monkeypatch.setattr(auth_service, "SMTP_HOST", "smtp.invalid.example")
     monkeypatch.setattr(auth_service, "SMTP_PORT", 587)
     with pytest.raises(auth_service.EmailDeliveryError):
         auth_service._send_email("x@y.ru", "subj", "body")
+
+
+def test_brevo_api_preferred_and_called(monkeypatch):
+    monkeypatch.setattr(auth_service, "BREVO_API_KEY", "test-key")
+    monkeypatch.setattr(auth_service, "SMTP_FROM", "sender@example.com")
+    calls = {}
+
+    class Resp:
+        status_code = 201
+        text = ""
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls["url"] = url
+        calls["api_key"] = headers.get("api-key")
+        calls["to"] = json["to"][0]["email"]
+        return Resp()
+
+    monkeypatch.setattr(auth_service.requests, "post", fake_post)
+    auth_service._send_email("dest@example.com", "subj", "body")
+    assert calls["url"] == "https://api.brevo.com/v3/smtp/email"
+    assert calls["api_key"] == "test-key"
+    assert calls["to"] == "dest@example.com"
+
+
+def test_brevo_api_error_raises(monkeypatch):
+    monkeypatch.setattr(auth_service, "BREVO_API_KEY", "test-key")
+
+    class Resp:
+        status_code = 401
+        text = "unauthorized"
+
+    monkeypatch.setattr(auth_service.requests, "post", lambda *a, **k: Resp())
+    with pytest.raises(auth_service.EmailDeliveryError):
+        auth_service._send_email("dest@example.com", "subj", "body")

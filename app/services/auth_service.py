@@ -16,9 +16,12 @@ logger = logging.getLogger("language_puzzle.email")
 
 from fastapi import HTTPException
 
+import requests
+
 from app.config import (
     ADMIN_EMAILS,
     APP_SECRET,
+    BREVO_API_KEY,
     EMAIL_VERIFICATION_ENABLED,
     SMTP_FROM,
     SMTP_FROM_NAME,
@@ -56,16 +59,34 @@ class EmailDeliveryError(RuntimeError):
     """Raised when an email could not be delivered (SMTP unreachable/rejected)."""
 
 
-def _send_email(to: str, subject: str, body: str) -> None:
-    """Send an email, or print to stdout when SMTP is not configured (dev).
+def _send_via_brevo_api(to: str, subject: str, body: str) -> None:
+    """Send through Brevo's transactional HTTPS API (port 443).
 
-    Raises EmailDeliveryError on any SMTP failure so callers can react (e.g. not
-    rotate a password if the temporary one could not be delivered).
+    Used when outbound SMTP ports are blocked by the host. Raises
+    EmailDeliveryError on any failure.
     """
-    if not SMTP_HOST:
-        print(f"[Language Puzzle] Email to {to} | {subject}\n{body}")
-        return
+    try:
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            headers={"api-key": BREVO_API_KEY, "content-type": "application/json"},
+            json={
+                "sender": {"email": SMTP_FROM, "name": SMTP_FROM_NAME or "Language Puzzle"},
+                "to": [{"email": to}],
+                "subject": subject,
+                "textContent": body,
+            },
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        logger.error("Brevo API delivery to %s failed — %s: %s", to, type(exc).__name__, exc)
+        raise EmailDeliveryError(str(exc)) from exc
+    if response.status_code >= 300:
+        logger.error("Brevo API rejected email to %s — %s: %s", to, response.status_code, response.text[:300])
+        raise EmailDeliveryError(f"Brevo API {response.status_code}: {response.text[:200]}")
 
+
+def _send_via_smtp(to: str, subject: str, body: str) -> None:
+    """Send through SMTP. Raises EmailDeliveryError on any failure."""
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = f"{SMTP_FROM_NAME} <{SMTP_FROM}>" if SMTP_FROM_NAME else SMTP_FROM
@@ -87,13 +108,26 @@ def _send_email(to: str, subject: str, body: str) -> None:
                     smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
                 smtp.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:
-        # Surface the real SMTP failure (blocked port, auth rejected, bad
-        # sender, ...) in the server logs — the client only gets a generic 502.
         logger.error(
             "SMTP delivery to %s failed via %s:%s — %s: %s",
             to, SMTP_HOST, SMTP_PORT, type(exc).__name__, exc,
         )
         raise EmailDeliveryError(str(exc)) from exc
+
+
+def _send_email(to: str, subject: str, body: str) -> None:
+    """Dispatch an email via the configured transport.
+
+    Order: Brevo HTTPS API (if BREVO_API_KEY set) -> SMTP (if SMTP_HOST set) ->
+    stdout (dev). Raises EmailDeliveryError so callers can avoid mutating state
+    (e.g. rotating a password) when delivery fails.
+    """
+    if BREVO_API_KEY:
+        _send_via_brevo_api(to, subject, body)
+    elif SMTP_HOST:
+        _send_via_smtp(to, subject, body)
+    else:
+        print(f"[Language Puzzle] Email to {to} | {subject}\n{body}")
 
 
 def send_verification_email(email: str, code: str) -> None:
