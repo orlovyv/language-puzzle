@@ -4,12 +4,15 @@ the register / verify / login flows. Cookie handling stays in the routes."""
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import secrets
 import smtplib
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from typing import Any
+
+logger = logging.getLogger("language_puzzle.email")
 
 from fastapi import HTTPException
 
@@ -84,6 +87,12 @@ def _send_email(to: str, subject: str, body: str) -> None:
                     smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
                 smtp.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:
+        # Surface the real SMTP failure (blocked port, auth rejected, bad
+        # sender, ...) in the server logs — the client only gets a generic 502.
+        logger.error(
+            "SMTP delivery to %s failed via %s:%s — %s: %s",
+            to, SMTP_HOST, SMTP_PORT, type(exc).__name__, exc,
+        )
         raise EmailDeliveryError(str(exc)) from exc
 
 
