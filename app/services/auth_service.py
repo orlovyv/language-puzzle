@@ -49,8 +49,16 @@ def verification_code_hash(email: str, code: str) -> str:
     return hashlib.sha256(f"{APP_SECRET}:{normalize_email(email)}:{code}".encode()).hexdigest()
 
 
+class EmailDeliveryError(RuntimeError):
+    """Raised when an email could not be delivered (SMTP unreachable/rejected)."""
+
+
 def _send_email(to: str, subject: str, body: str) -> None:
-    """Send an email, or print to stdout when SMTP is not configured (dev)."""
+    """Send an email, or print to stdout when SMTP is not configured (dev).
+
+    Raises EmailDeliveryError on any SMTP failure so callers can react (e.g. not
+    rotate a password if the temporary one could not be delivered).
+    """
     if not SMTP_HOST:
         print(f"[Language Puzzle] Email to {to} | {subject}\n{body}")
         return
@@ -61,12 +69,22 @@ def _send_email(to: str, subject: str, body: str) -> None:
     message["To"] = to
     message.set_content(body)
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
-        if SMTP_USE_TLS:
-            smtp.starttls()
-        if SMTP_USERNAME:
-            smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
-        smtp.send_message(message)
+    try:
+        # Port 465 speaks implicit SSL; 587/2525 use STARTTLS.
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
+                if SMTP_USERNAME:
+                    smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(message)
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as smtp:
+                if SMTP_USE_TLS:
+                    smtp.starttls()
+                if SMTP_USERNAME:
+                    smtp.login(SMTP_USERNAME, SMTP_PASSWORD)
+                smtp.send_message(message)
+    except (OSError, smtplib.SMTPException) as exc:
+        raise EmailDeliveryError(str(exc)) from exc
 
 
 def send_verification_email(email: str, code: str) -> None:
@@ -195,7 +213,13 @@ def register_user(conn, payload, remote_ip: str | None = None) -> dict[str, Any]
         verification_code_hash(email, code),
         datetime.now(timezone.utc) + timedelta(minutes=VERIFICATION_CODE_TTL_MINUTES),
     )
-    send_verification_email(email, code)
+    try:
+        send_verification_email(email, code)
+    except EmailDeliveryError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось отправить код подтверждения. Попробуйте позже.",
+        ) from exc
     return {"requires_verification": True, "email": email}
 
 
@@ -260,10 +284,17 @@ def request_password_reset(conn, payload) -> dict[str, Any]:
         user = user_repository.find_user_by_email(conn, email)
         if user:
             temporary = secrets.token_urlsafe(9)
+            # Send first: only rotate the password if the email was delivered, so
+            # a delivery failure never locks the user out of their account.
+            try:
+                send_temporary_password_email(email, temporary)
+            except EmailDeliveryError as exc:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Не удалось отправить письмо. Попробуйте позже.",
+                ) from exc
             user_repository.update_password(conn, user["id"], hash_password(temporary), must_change=True)
-            # Force re-login everywhere with the new temporary password.
             user_repository.delete_other_sessions(conn, user["id"])
-            send_temporary_password_email(email, temporary)
     return {"ok": True}
 
 
