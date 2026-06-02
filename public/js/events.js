@@ -100,6 +100,24 @@ function bindSharedEvents() {
     state.wordsVisibleCount = Math.max(100, Number(state.wordsVisibleCount || 100)) + 100;
     renderApp();
   });
+
+  document.querySelectorAll("[data-ai-card]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const knowledgeId = button.dataset.aiCard;
+      const kind = button.dataset.aiKind === "phrase" ? "user-phrases" : "user-words";
+      state.aiCardLoadingIds.add(knowledgeId);
+      renderApp();
+      try {
+        const { card } = await api(`/api/${kind}/${knowledgeId}/enrich`, { method: "POST" });
+        state.aiCards[knowledgeId] = card;
+      } catch (error) {
+        state.message = error.message || "AI-подсказки недоступны.";
+      } finally {
+        state.aiCardLoadingIds.delete(knowledgeId);
+        renderApp();
+      }
+    });
+  });
 }
 
 function bindUploadEvents() {

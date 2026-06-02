@@ -84,17 +84,20 @@ function renderKnowledgeToken(item, selected) {
   const status = item.status || "unknown";
   const active = selected && unitKey(item) === unitKey(selected);
   const nextStatus = status === "known" ? "unknown" : "known";
+  const isAi = item.source === "ai";
+  // For AI-picked words, prefer the AI explanation as the tooltip.
+  const tip = isAi && item.why ? item.why : translationTooltip(item.translation_ru);
   return `
     <button
-      class="cloud-token ${status} ${active ? "active" : ""}"
+      class="cloud-token ${status} ${active ? "active" : ""} ${isAi ? "ai-pick" : ""}"
       data-kg-key="${escapeHtml(unitKey(item))}"
       data-kg-status="${item.knowledge_id}"
       data-kind="${kind}"
       data-status="${nextStatus}"
       data-tooltip-kind="${kind}"
       data-tooltip-id="${escapeHtml(item.knowledge_id || "")}"
-      title="${escapeHtml(translationTooltip(item.translation_ru))}"
-    >${escapeHtml(item.text)}</button>
+      title="${escapeHtml(tip)}"
+    >${escapeHtml(item.text)}${isAi ? `<sup class="ai-badge" title="Подобрано ИИ">AI</sup>` : ""}</button>
   `;
 }
 
@@ -117,8 +120,29 @@ export function renderKnowledgeDetail(item) {
     ${item.kind === "word"
       ? `<p class="meta">Часть речи: ${escapeHtml(posLabel(item.part_of_speech))}</p>`
       : `<p class="meta">Устойчивое выражение / фразовый глагол</p>`}
+    ${item.source === "ai" && item.why ? `<p class="meta ai-why">✦ ИИ: ${escapeHtml(item.why)}</p>` : ""}
     ${example ? `<div><strong>Пример:</strong><ul class="detail-examples"><li><span>${escapeHtml(example)}</span>${renderTtsButton(example, "Озвучить пример", "mini")}</li></ul></div>` : ""}
+    ${renderAiCard(item)}
   `;
+}
+
+// Premium-only AI hints (synonyms / mnemonic / context), loaded on demand.
+export function renderAiCard(item) {
+  if (!item || !item.knowledge_id) return "";
+  if (!(state.user?.is_premium || state.user?.is_admin)) return "";
+  const kind = item.kind === "phrase" ? "phrase" : "word";
+  const card = state.aiCards?.[item.knowledge_id];
+  const loading = state.aiCardLoadingIds?.has(item.knowledge_id);
+  if (card) {
+    return `
+      <div class="ai-card">
+        <p class="meta ai-card-title">AI-подсказки</p>
+        ${card.synonyms?.length ? `<p><strong>Синонимы:</strong> ${escapeHtml(card.synonyms.join(", "))}</p>` : ""}
+        ${card.mnemonic ? `<p><strong>Мнемоника:</strong> ${escapeHtml(card.mnemonic)}</p>` : ""}
+        ${card.context ? `<p class="subtle">${escapeHtml(card.context)}</p>` : ""}
+      </div>`;
+  }
+  return `<button data-ai-card="${escapeHtml(item.knowledge_id)}" data-ai-kind="${kind}" ${loading ? "disabled" : ""}>${loading ? "Загрузка..." : "✦ AI-подсказки"}</button>`;
 }
 
 // Builds Learn-ready units from the current Theme Card context.

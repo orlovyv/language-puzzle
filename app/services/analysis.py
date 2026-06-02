@@ -350,15 +350,24 @@ def load_word_translation_on_demand(
     row = word_repository.find_user_word_with_word(conn, knowledge_id, user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Слово не найдено.")
+
+    # Premium: always try a context-aware AI translation (cached, so it costs
+    # tokens only once per word), overwriting the dictionary value when it works.
+    if enrichment._is_premium(user):
+        ai = _ai_translation(
+            conn, user, row.get("lemma", ""), pos=row.get("part_of_speech"), context=row.get("example")
+        )
+        if ai:
+            row = word_repository.update_word_translation(conn, row["id"], ai)
+            rerun_user_analyses(conn, user)
+            return {**row, "user_word_id": knowledge_id}
+        if has_resolved_translation(row.get("translation_ru")):
+            return row
+
+    # Free (or AI unavailable): keep the existing translation, else client value.
     if has_resolved_translation(row.get("translation_ru")):
         return row
-
-    # Premium: prefer a context-aware AI translation; fall back to client value.
-    translation = _ai_translation(
-        conn, user, row.get("lemma", ""), pos=row.get("part_of_speech"), context=row.get("example")
-    )
-    if not translation:
-        translation = clean_client_translation(translation_ru)
+    translation = clean_client_translation(translation_ru)
     if translation:
         row = word_repository.update_word_translation(conn, row["id"], translation)
         rerun_user_analyses(conn, user)
@@ -375,10 +384,22 @@ def load_phrase_translation_on_demand(
     row = phrase_repository.find_user_phrase_with_phrase(conn, knowledge_id, user["id"])
     if not row:
         raise HTTPException(status_code=404, detail="Фраза не найдена.")
+
+    phrase = row.get("base_form") or row.get("phrase")
+
+    # Premium: prefer an AI translation (cached), overwriting existing value.
+    if enrichment._is_premium(user):
+        ai = _ai_translation(conn, user, phrase, pos=row.get("type"))
+        if ai:
+            row = phrase_repository.update_phrase_translation(conn, row["id"], ai)
+            rerun_user_analyses(conn, user)
+            return {**row, "user_phrase_id": knowledge_id}
+        if has_resolved_translation(row.get("translation_ru")):
+            return row
+
     if has_resolved_translation(row.get("translation_ru")):
         return row
 
-    phrase = row.get("base_form") or row.get("phrase")
     translation = phrase_dictionary_translation(
         conn,
         phrase,
@@ -386,14 +407,38 @@ def load_phrase_translation_on_demand(
         language=row.get("language") or user.get("target_language") or "en",
     )
     if not translation:
-        translation = _ai_translation(conn, user, phrase, pos=row.get("type"))
-    if not translation:
         translation = clean_client_translation(translation_ru)
     if translation:
         row = phrase_repository.update_phrase_translation(conn, row["id"], translation)
         rerun_user_analyses(conn, user)
         return {**row, "user_phrase_id": knowledge_id}
     return row
+
+
+# ---------------------------------------------------------------------------
+# on-demand AI card (synonyms / mnemonic / context) for premium
+# ---------------------------------------------------------------------------
+def load_word_ai_card(conn, user: dict[str, Any], knowledge_id: str) -> dict[str, Any]:
+    row = word_repository.find_user_word_with_word(conn, knowledge_id, user["id"])
+    if not row:
+        raise HTTPException(status_code=404, detail="Слово не найдено.")
+    try:
+        return enrichment.ai_card(
+            conn, user, row.get("lemma", ""), row.get("translation_ru", ""), pos=row.get("part_of_speech")
+        )
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=502, detail="AI-подсказки сейчас недоступны.") from exc
+
+
+def load_phrase_ai_card(conn, user: dict[str, Any], knowledge_id: str) -> dict[str, Any]:
+    row = phrase_repository.find_user_phrase_with_phrase(conn, knowledge_id, user["id"])
+    if not row:
+        raise HTTPException(status_code=404, detail="Фраза не найдена.")
+    text = row.get("base_form") or row.get("phrase") or ""
+    try:
+        return enrichment.ai_card(conn, user, text, row.get("translation_ru", ""), pos=row.get("type"))
+    except LLMUnavailable as exc:
+        raise HTTPException(status_code=502, detail="AI-подсказки сейчас недоступны.") from exc
 
 
 # ---------------------------------------------------------------------------

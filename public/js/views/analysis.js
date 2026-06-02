@@ -16,6 +16,7 @@ import {
 import { renderTtsButton } from "../tts.js";
 import { renderHeader } from "./shell.js";
 import { renderDocumentViewSwitch } from "./document.js";
+import { renderAiCard } from "./knowledge.js";
 
 export function renderAnalysis() {
   const analysis = state.currentAnalysis;
@@ -102,6 +103,7 @@ function renderAnalysisDetail(item) {
     ${item.kind === "phrase"
       ? `<p class="meta">Устойчивое выражение / фразовый глагол</p>`
       : `<p class="meta">Часть речи: ${escapeHtml(posLabel(item.part_of_speech))}</p>`}
+    ${renderAiCard(item)}
   `;
 }
 

@@ -1990,3 +1990,10 @@ textarea {
 .admin-action-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
 .admin-actions[data-loading] { opacity: 0.6; pointer-events: none; }
 .mobile-mode .admin-layout, .mobile-mode .admin-stats { grid-template-columns: 1fr; }
+
+/* AI enrichment in cards / Knowledge */
+.ai-card { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); }
+.ai-card-title { margin: 0 0 6px; font-weight: 700; color: var(--accent); }
+.ai-why { color: var(--accent); }
+.cloud-token.ai-pick { box-shadow: inset 0 0 0 2px rgba(34,102,170,0.35); }
+.ai-badge { font-size: 9px; font-weight: 700; color: var(--accent); margin-left: 3px; vertical-align: super; }

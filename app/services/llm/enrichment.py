@@ -162,3 +162,9 @@ def ai_anki_card(conn, user, text: str, translation: str, pos: str | None = None
         "synonyms": [str(s).strip()[:60] for s in synonyms if str(s).strip()][:4] if isinstance(synonyms, list) else [],
         "context": str(result.get("context") or "").strip()[:300],
     }
+
+
+# UI alias: same enriched card (mnemonic/synonyms/context), shown on demand in
+# the word/phrase detail panel. Shares the cache with the Anki export.
+def ai_card(conn, user, text: str, translation: str, pos: str | None = None) -> dict[str, Any]:
+    return ai_anki_card(conn, user, text, translation, pos=pos)
