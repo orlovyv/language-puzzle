@@ -8,6 +8,7 @@ from app.core.database import db
 from app.schemas.user_schema import AdminBlockPayload, AdminSubscriptionPayload
 from app.services import admin_service
 from app.services.auth_service import require_admin
+from app.services.llm.enrichment import ai_healthcheck
 
 router = APIRouter()
 
@@ -17,6 +18,13 @@ def admin_stats(lp_session: str | None = Cookie(default=None), authorization: st
     with db() as conn:
         require_admin(conn, lp_session, authorization)
         return {"stats": admin_service.stats(conn)}
+
+
+@router.get("/api/admin/ai-health")
+def admin_ai_health(lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
+    with db() as conn:
+        admin = require_admin(conn, lp_session, authorization)
+        return {"health": ai_healthcheck(conn, admin)}
 
 
 @router.get("/api/admin/users")

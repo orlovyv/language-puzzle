@@ -20,6 +20,41 @@ from app.services.llm import prompts
 from app.services.llm.client import LLMUnavailable, chat_json, is_configured
 
 
+def ai_healthcheck(conn, user: dict[str, Any] | None) -> dict[str, Any]:
+    """Diagnose the AI setup: config, plan/quota, and a live test call.
+
+    Never raises — returns a report dict so an admin can see the real cause
+    (bad key, missing model, no balance, quota, ...).
+    """
+    today = datetime.now(timezone.utc).date()
+    usage_today = None
+    if conn is not None and user:
+        usage_today = ai_repository.usage_today(conn, user["id"], today)
+    report: dict[str, Any] = {
+        "configured": is_configured(),
+        "model": LLM_MODEL,
+        "is_premium": _is_premium(user),
+        "daily_limit": _daily_limit(user),
+        "usage_today": usage_today,
+        "ok": False,
+        "error": None,
+    }
+    if not is_configured():
+        report["error"] = "AI not configured (USE_AI_FEATURES off or OPENROUTER_API_KEY missing)"
+        return report
+    try:
+        # Minimal live call — bypasses cache/quota to test the real connection.
+        result = chat_json(
+            'Return JSON {"ok": true}.',
+            '{"ping": 1}',
+        )
+        report["ok"] = bool(result)
+        report["sample"] = result
+    except Exception as exc:  # LLMUnavailable and anything unexpected
+        report["error"] = f"{type(exc).__name__}: {exc}"
+    return report
+
+
 def _cache_key(task: str, payload: str) -> str:
     raw = f"{task}|{LLM_MODEL}|{payload}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()

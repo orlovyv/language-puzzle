@@ -105,3 +105,37 @@ def test_empty_translation_raises(monkeypatch):
         assert False, "expected LLMUnavailable"
     except LLMUnavailable:
         pass
+
+
+def test_ai_healthcheck_ok(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    _patch(monkeypatch, response={"ok": True})
+    monkeypatch.setattr(enrich.ai_repository, "usage_today", lambda conn, uid, day: 0)
+    user = {"id": "u1", "plan": "premium", "premium_until": datetime.now(timezone.utc) + timedelta(days=3)}
+    report = enrich.ai_healthcheck(None, user)
+    assert report["ok"] is True
+    assert report["configured"] is True
+    assert report["is_premium"] is True
+    assert report["error"] is None
+
+
+def test_ai_healthcheck_reports_error(monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    monkeypatch.setattr(enrich, "is_configured", lambda: True)
+    monkeypatch.setattr(enrich.ai_repository, "usage_today", lambda conn, uid, day: 0)
+
+    def boom(system, prompt):
+        raise enrich.LLMUnavailable("HTTPError: 401 unauthorized")
+
+    monkeypatch.setattr(enrich, "chat_json", boom)
+    user = {"id": "u1", "plan": "premium", "premium_until": datetime.now(timezone.utc) + timedelta(days=3)}
+    report = enrich.ai_healthcheck(None, user)
+    assert report["ok"] is False
+    assert "401" in report["error"]
+
+
+def test_ai_healthcheck_unconfigured(monkeypatch):
+    monkeypatch.setattr(enrich, "is_configured", lambda: False)
+    report = enrich.ai_healthcheck(None, {"id": "u1", "plan": "free"})
+    assert report["ok"] is False
+    assert "not configured" in report["error"].lower()
