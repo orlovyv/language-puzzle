@@ -88,6 +88,9 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
 SMTP_FROM = _str("SMTP_FROM", SMTP_USERNAME or "noreply@language-puzzle.local")
 SMTP_FROM_NAME = _str("SMTP_FROM_NAME", "Language Puzzle")
 SMTP_USE_TLS = _flag("SMTP_USE_TLS", "1")
+# Brevo transactional email over HTTPS (port 443) — used when SMTP ports are
+# blocked by the host. If set, it is preferred over SMTP.
+BREVO_API_KEY = os.getenv("BREVO_API_KEY", "")
 EMAIL_VERIFICATION_ENABLED = _flag("EMAIL_VERIFICATION_ENABLED", "1")
 
 # --- Cloudflare Turnstile ("я не робот"). Off => captcha check skipped ---
