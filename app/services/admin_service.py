@@ -13,7 +13,7 @@ from typing import Any
 from fastapi import HTTPException
 
 from app.repositories import admin_repository, payment_repository, user_repository
-from app.services.auth_service import send_temporary_password_email
+from app.services.auth_service import EmailDeliveryError, send_temporary_password_email
 from app.services.billing import subscription_service
 from app.utils.security import hash_password
 
@@ -107,7 +107,14 @@ def set_blocked(conn, admin_id: str, user_id: str, blocked: bool) -> dict[str, A
 def reset_password(conn, user_id: str) -> dict[str, Any]:
     user = _require_user(conn, user_id)
     temporary = secrets.token_urlsafe(9)
+    # Send first; only rotate the password if delivery succeeded.
+    try:
+        send_temporary_password_email(user["email"], temporary)
+    except EmailDeliveryError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Не удалось отправить письмо пользователю.",
+        ) from exc
     user_repository.update_password(conn, user_id, hash_password(temporary), must_change=True)
     user_repository.delete_other_sessions(conn, user_id)
-    send_temporary_password_email(user["email"], temporary)
     return {"ok": True}
