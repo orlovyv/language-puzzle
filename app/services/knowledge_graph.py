@@ -6,9 +6,12 @@ and a usefulness heuristic, then filtered against what the user already knows.
 
 from __future__ import annotations
 
+import logging
 import re
 from functools import lru_cache
 from typing import Any
+
+logger = logging.getLogger("language_puzzle.kg")
 
 from app.repositories import phrase_repository, word_repository
 from app.services.analysis import ensure_phrase, ensure_word, make_phrase_hit
@@ -38,7 +41,8 @@ def _ai_ranked_prepend(conn, user: dict[str, Any], topic: str, known_terms: set[
     """
     try:
         items = enrichment.ai_topic_vocabulary(conn, user, topic, sorted(known_terms))
-    except LLMUnavailable:
+    except LLMUnavailable as exc:
+        logger.info("KG AI vocabulary unavailable for topic %r — %s", topic, exc)
         return []
     ranked: list[dict[str, Any]] = []
     for item in items:
@@ -46,7 +50,9 @@ def _ai_ranked_prepend(conn, user: dict[str, Any], topic: str, known_terms: set[
         if not word or " " in word or word in known_terms:
             continue
         ranked.append({"word": word, "pos": "noun", "score": 1.0, "frequency": kg_wordfreq(word),
-                       "semantic": 1.0, "usefulness": 1.0})
+                       "semantic": 1.0, "usefulness": 1.0,
+                       "source": "ai", "why": item.get("why", "")})
+    logger.info("KG AI vocabulary added %d words for topic %r", len(ranked), topic)
     return ranked
 
 try:
@@ -336,6 +342,9 @@ def kg_unit_from_word(conn, user: dict[str, Any], item: dict[str, Any], example:
         "score": round(float(item.get("score") or 0) * 100, 2),
         "count": 1,
         "frequency_rank": word["frequency_rank"],
+        # Carry AI provenance so the UI can badge AI-picked vocabulary.
+        "source": item.get("source") or "frequency",
+        "why": item.get("why") or "",
     }
 
 

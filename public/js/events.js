@@ -7,6 +7,7 @@ import { MAX_RAW_TEXT_LINES, state } from "./state.js";
 import { ankiFileName, cleanTranslation, countTextLines, formatRangeValue, looksLikeSubtitleText, normalizeUser, unitKey, validateRawText } from "./utils.js";
 import {
   applyKnowledgeContextStatus,
+  applyLocalTranslation,
   ensureTranslation,
   localTranslation,
   patchKnowledgeStatus,
@@ -99,6 +100,28 @@ function bindSharedEvents() {
   document.querySelector("[data-words-next]")?.addEventListener("click", () => {
     state.wordsVisibleCount = Math.max(100, Number(state.wordsVisibleCount || 100)) + 100;
     renderApp();
+  });
+
+  document.querySelectorAll("[data-ai-card]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const knowledgeId = button.dataset.aiCard;
+      const kind = button.dataset.aiKind === "phrase" ? "user-phrases" : "user-words";
+      state.aiCardLoadingIds.add(knowledgeId);
+      renderApp();
+      try {
+        const { card } = await api(`/api/${kind}/${knowledgeId}/enrich`, { method: "POST" });
+        state.aiCards[knowledgeId] = card;
+        // Propagate the improved AI translation to all cached views.
+        if (card?.translation_ru) {
+          applyLocalTranslation(button.dataset.aiKind === "phrase" ? "phrase" : "word", knowledgeId, card.translation_ru);
+        }
+      } catch (error) {
+        state.message = error.message || "AI-подсказки недоступны.";
+      } finally {
+        state.aiCardLoadingIds.delete(knowledgeId);
+        renderApp();
+      }
+    });
   });
 }
 

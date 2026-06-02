@@ -9,12 +9,14 @@ from app.core.database import db
 from app.repositories import phrase_repository, word_repository
 from app.schemas.user_schema import StatusPayload, TranslationPayload
 from app.services.analysis import (
+    load_phrase_ai_card,
     load_phrase_translation_on_demand,
+    load_word_ai_card,
     load_word_translation_on_demand,
     rerun_document_analysis,
     rerun_user_analyses,
 )
-from app.services.auth_service import require_user
+from app.services.auth_service import require_premium, require_user
 from app.services.scoring import confidence_for
 
 router = APIRouter()
@@ -90,3 +92,17 @@ def load_user_phrase_translation(
             conn, user, knowledge_id, translation_ru=payload.translation_ru if payload else None
         )
         return {"phrase": phrase}
+
+
+@router.post("/api/user-words/{knowledge_id}/enrich")
+def enrich_user_word(knowledge_id: str, lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
+    with db() as conn:
+        user = require_premium(conn, lp_session, authorization)
+        return {"card": load_word_ai_card(conn, user, knowledge_id)}
+
+
+@router.post("/api/user-phrases/{knowledge_id}/enrich")
+def enrich_user_phrase(knowledge_id: str, lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
+    with db() as conn:
+        user = require_premium(conn, lp_session, authorization)
+        return {"card": load_phrase_ai_card(conn, user, knowledge_id)}

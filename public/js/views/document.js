@@ -4,6 +4,7 @@ import { state } from "../state.js";
 import { cleanExample, cleanTranscription, cleanTranslation, escapeHtml, statusText, translationTooltip } from "../utils.js";
 import { renderTtsButton } from "../tts.js";
 import { renderHeader } from "./shell.js";
+import { renderAiCard } from "./knowledge.js";
 
 export function renderDocument() {
   const doc = state.currentDocument;
@@ -48,6 +49,7 @@ function renderWordDetail(word) {
     ${!isPhrase && transcription ? `<p><strong>Транскрипция:</strong> /${escapeHtml(transcription)}/</p>` : ""}
     ${examples.length ? `<div><strong>Пример в тексте:</strong><ul class="detail-examples">${examples.map((example) => `<li><span>${escapeHtml(example)}</span>${renderTtsButton(example, "Озвучить пример", "mini")}</li>`).join("")}</ul></div>` : ""}
     ${isPhrase ? `<p class="meta">Устойчивое выражение: ${escapeHtml(word.phrase_type || "phrase")}</p>` : ""}
+    ${renderAiCard({ knowledge_id: isPhrase ? word.user_phrase_id : word.user_word_id, kind: isPhrase ? "phrase" : "word" })}
   `;
 }
 

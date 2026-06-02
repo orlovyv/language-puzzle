@@ -69,6 +69,8 @@ export const state = {
   adminSelectedUser: null,
   adminLoading: false,
   adminAiHealth: null,
+  aiCards: {},
+  aiCardLoadingIds: new Set(),
   ttsVoices: [],
   selectedWord: null,
   wordsVisibleCount: 100,
