@@ -65,7 +65,6 @@ def _send_via_brevo_api(to: str, subject: str, body: str) -> None:
     Used when outbound SMTP ports are blocked by the host. Raises
     EmailDeliveryError on any failure.
     """
-    print(f"[email] Brevo API send to {to}, from={SMTP_FROM!r}, key_set={bool(BREVO_API_KEY)}", flush=True)
     try:
         response = requests.post(
             "https://api.brevo.com/v3/smtp/email",
@@ -79,12 +78,11 @@ def _send_via_brevo_api(to: str, subject: str, body: str) -> None:
             timeout=15,
         )
     except requests.RequestException as exc:
-        print(f"[email] Brevo API request failed — {type(exc).__name__}: {exc}", flush=True)
-        raise EmailDeliveryError(f"{type(exc).__name__}: {exc}") from exc
+        logger.error("Brevo API delivery to %s failed — %s: %s", to, type(exc).__name__, exc)
+        raise EmailDeliveryError(str(exc)) from exc
     if response.status_code >= 300:
-        print(f"[email] Brevo API rejected — {response.status_code}: {response.text[:300]}", flush=True)
+        logger.error("Brevo API rejected email to %s — %s: %s", to, response.status_code, response.text[:300])
         raise EmailDeliveryError(f"Brevo API {response.status_code}: {response.text[:200]}")
-    print(f"[email] Brevo API accepted — {response.status_code}", flush=True)
 
 
 def _send_via_smtp(to: str, subject: str, body: str) -> None:
@@ -334,10 +332,9 @@ def request_password_reset(conn, payload) -> dict[str, Any]:
             try:
                 send_temporary_password_email(email, temporary)
             except EmailDeliveryError as exc:
-                # TEMP DIAGNOSTIC: surface the real delivery error to the client.
                 raise HTTPException(
                     status_code=502,
-                    detail=f"Не удалось отправить письмо: {exc}",
+                    detail="Не удалось отправить письмо. Попробуйте позже.",
                 ) from exc
             user_repository.update_password(conn, user["id"], hash_password(temporary), must_change=True)
             user_repository.delete_other_sessions(conn, user["id"])

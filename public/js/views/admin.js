@@ -25,6 +25,7 @@ export function renderAdmin() {
     <section class="grid stats admin-stats">
       ${STAT_CARDS.map(([key, label]) => metric(label, formatStat(stats[key]))).join("")}
     </section>
+    ${renderAiHealth()}
     <section class="admin-layout">
       <div class="card admin-users">
         <div class="section-title">
@@ -43,6 +44,25 @@ export function renderAdmin() {
       </aside>
     </section>
   `;
+}
+
+function renderAiHealth() {
+  const h = state.adminAiHealth;
+  const button = `<button data-admin-ai-health ${state.adminLoading ? "disabled" : ""}>${state.adminLoading ? "Проверка..." : "Проверить AI"}</button>`;
+  let result = "";
+  if (h) {
+    const badge = h.ok
+      ? `<span class="pill known">работает</span>`
+      : `<span class="pill ignored">не работает</span>`;
+    result = `
+      <p>${badge} модель: <strong>${escapeHtml(h.model || "")}</strong> · конфиг: ${h.configured ? "да" : "нет"} · premium: ${h.is_premium ? "да" : "нет"} · лимит/день: ${h.daily_limit} · использовано: ${h.usage_today ?? 0}</p>
+      ${h.error ? `<p class="notice">${escapeHtml(h.error)}</p>` : `<p class="subtle">Тестовый вызов прошёл успешно.</p>`}`;
+  }
+  return `
+    <section class="card admin-ai-health">
+      <div class="section-title"><h2>AI (OpenRouter)</h2>${button}</div>
+      ${result}
+    </section>`;
 }
 
 function renderUserRow(user) {

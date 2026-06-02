@@ -528,6 +528,20 @@ async function adminAction(userId, fn) {
 }
 
 function bindAdminEvents() {
+  document.querySelector("[data-admin-ai-health]")?.addEventListener("click", async () => {
+    state.adminLoading = true;
+    renderApp();
+    try {
+      const { health } = await api("/api/admin/ai-health");
+      state.adminAiHealth = health;
+    } catch (error) {
+      state.adminAiHealth = { ok: false, error: error.message || "Запрос не удался" };
+    } finally {
+      state.adminLoading = false;
+      renderApp();
+    }
+  });
+
   const search = document.querySelector("#adminSearch");
   if (search) {
     search.addEventListener("change", async () => {

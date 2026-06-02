@@ -68,6 +68,7 @@ export const state = {
   adminQuery: "",
   adminSelectedUser: null,
   adminLoading: false,
+  adminAiHealth: null,
   ttsVoices: [],
   selectedWord: null,
   wordsVisibleCount: 100,
