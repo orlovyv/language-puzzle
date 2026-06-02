@@ -137,6 +137,7 @@ export function renderAiCard(item) {
     return `
       <div class="ai-card">
         <p class="meta ai-card-title">AI-подсказки</p>
+        ${card.translation_ru ? `<p><strong>AI-перевод:</strong> ${escapeHtml(card.translation_ru)}</p>` : ""}
         ${card.synonyms?.length ? `<p><strong>Синонимы:</strong> ${escapeHtml(card.synonyms.join(", "))}</p>` : ""}
         ${card.mnemonic ? `<p><strong>Мнемоника:</strong> ${escapeHtml(card.mnemonic)}</p>` : ""}
         ${card.context ? `<p class="subtle">${escapeHtml(card.context)}</p>` : ""}
