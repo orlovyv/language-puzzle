@@ -55,6 +55,60 @@ def test_ai_card_is_anki_card_alias(monkeypatch):
     assert a == b
 
 
+def test_ai_card_verb_forms_meanings_examples(monkeypatch):
+    _patch_enrich(monkeypatch, {
+        "mnemonic": "m",
+        "synonyms": ["leave"],
+        "context": "c",
+        "verb_forms": {"base": "go", "past": "went", "participle": "gone"},
+        "other_meanings": [
+            {"meaning": "ходить", "note": "о транспорте"},
+            {"meaning": "становиться"},
+            {"meaning": "пропадать"},
+            {"meaning": "лишний"},  # 4th -> trimmed to 3
+        ],
+        "context_examples": [
+            {"en": "Let's go home.", "ru": "Пойдём домой."},
+            {"en": "The milk went bad.", "ru": "Молоко испортилось."},
+        ],
+    })
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    card = enrich.ai_card(None, user, "go", "идти", pos="verb")
+    assert card["verb_forms"] == {"base": "go", "past": "went", "participle": "gone"}
+    assert len(card["other_meanings"]) == 3  # capped
+    assert card["other_meanings"][0] == {"meaning": "ходить", "note": "о транспорте"}
+    assert len(card["context_examples"]) == 2
+    assert card["context_examples"][0]["en"] == "Let's go home."
+
+
+def test_ai_card_non_verb_drops_empty_forms(monkeypatch):
+    _patch_enrich(monkeypatch, {
+        "mnemonic": "m", "synonyms": [], "context": "c",
+        "verb_forms": {"base": "", "past": "", "participle": ""},
+        "other_meanings": [], "context_examples": [],
+    })
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    card = enrich.ai_card(None, user, "table", "стол", pos="noun")
+    assert card["verb_forms"] == {}  # nothing meaningful -> dropped
+    assert card["other_meanings"] == []
+    assert card["context_examples"] == []
+
+
+def test_ai_card_examples_require_en(monkeypatch):
+    _patch_enrich(monkeypatch, {
+        "mnemonic": "m", "synonyms": [], "context": "c",
+        "context_examples": [
+            {"en": "", "ru": "без английского"},  # dropped
+            {"en": "Valid one.", "ru": "Верный."},
+            "garbage",  # dropped
+        ],
+    })
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    card = enrich.ai_card(None, user, "x", "y")
+    assert len(card["context_examples"]) == 1
+    assert card["context_examples"][0]["en"] == "Valid one."
+
+
 # ---------------------------------------------------------------------------
 # Stage 3: KG marks AI-picked words with source/why
 # ---------------------------------------------------------------------------

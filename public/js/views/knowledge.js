@@ -135,11 +135,18 @@ export function renderAiCard(item) {
   const card = state.aiCards?.[item.knowledge_id];
   const loading = state.aiCardLoadingIds?.has(item.knowledge_id);
   if (card) {
+    const f = card.verb_forms || {};
+    const forms = [f.base, f.past, f.participle].filter(Boolean);
+    const meanings = card.other_meanings || [];
+    const examples = card.context_examples || [];
     return `
       <div class="ai-card">
         <p class="meta ai-card-title">AI-подсказки</p>
         ${card.translation_ru ? `<p><strong>AI-перевод:</strong> ${escapeHtml(card.translation_ru)}</p>` : ""}
+        ${forms.length ? `<p><strong>Формы глагола:</strong> ${escapeHtml(forms.join(" — "))}</p>` : ""}
         ${card.synonyms?.length ? `<p><strong>Синонимы:</strong> ${escapeHtml(card.synonyms.join(", "))}</p>` : ""}
+        ${meanings.length ? `<div><strong>Другие значения:</strong><ul class="ai-card-list">${meanings.map((m) => `<li>${escapeHtml(m.meaning)}${m.note ? ` <span class="subtle">(${escapeHtml(m.note)})</span>` : ""}</li>`).join("")}</ul></div>` : ""}
+        ${examples.length ? `<div><strong>Примеры в контексте:</strong><ul class="ai-card-list">${examples.map((e) => `<li>${escapeHtml(e.en)}${e.ru ? `<br><span class="subtle">${escapeHtml(e.ru)}</span>` : ""}</li>`).join("")}</ul></div>` : ""}
         ${card.mnemonic ? `<p><strong>Мнемоника:</strong> ${escapeHtml(card.mnemonic)}</p>` : ""}
         ${card.context ? `<p class="subtle">${escapeHtml(card.context)}</p>` : ""}
       </div>`;
