@@ -49,8 +49,9 @@ export function renderKnowledge() {
           </div>
           <div class="kg-bridges">
             ${(context.bridges || []).map((bridge) => `
-              <button data-kg-bridge-id="${escapeHtml(bridge.id || "")}" data-kg-bridge="${escapeHtml(bridge.title)}" ${bridgeLoadingId && bridgeLoadingId === (bridge.id || "") ? "disabled" : ""}>
+              <button data-kg-bridge-id="${escapeHtml(bridge.id || "")}" data-kg-bridge="${escapeHtml(bridge.title)}" title="${escapeHtml(bridge.description || "")}" ${bridgeLoadingId && bridgeLoadingId === (bridge.id || "") ? "disabled" : ""}>
                 <strong>${escapeHtml(bridge.title)}</strong>
+                ${bridge.description ? `<span class="kg-bridge-reason">${escapeHtml(bridge.description)}</span>` : ""}
               </button>
             `).join("") || `<span class="meta">Мосты появятся после генерации.</span>`}
           </div>

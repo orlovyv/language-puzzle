@@ -35,6 +35,16 @@ ANKI_CARD_SYSTEM = (
     "a short Russian mnemonic, up to 4 English synonyms, and a short Russian usage note."
 )
 
+BRIDGE_TOPICS_SYSTEM = (
+    "You design 'bridge topics' for an English learner: adjacent real-life "
+    "situations that naturally extend a given topic and motivate new vocabulary. "
+    'Return ONLY a JSON object {"topics": [{"title": "...", "reason": "...", '
+    '"starter_words": ["...", "..."]}]} with up to 6 topics. '
+    "'title' is a vivid, concrete Russian situation name (NOT 'X situations' — "
+    "e.g. 'Регистрация на рейс', 'Заказ еды в кафе'). 'reason' is a short Russian "
+    "note why it extends the topic. 'starter_words' are 2-4 English seed words for it."
+)
+
 
 def translate_user_prompt(text: str, pos: str | None, context: str | None) -> str:
     return json.dumps(
@@ -57,5 +67,12 @@ def topic_vocab_user_prompt(topic: str, known_terms: list[str]) -> str:
 def anki_card_user_prompt(text: str, translation: str, pos: str | None) -> str:
     return json.dumps(
         {"term": text, "translation": translation or "", "part_of_speech": pos or ""},
+        ensure_ascii=False,
+    )
+
+
+def bridge_topics_user_prompt(topic: str, related_words: list[str]) -> str:
+    return json.dumps(
+        {"topic": topic, "related_words": related_words[:20]},
         ensure_ascii=False,
     )
