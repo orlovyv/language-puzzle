@@ -80,3 +80,54 @@ def test_kg_ai_prepend_empty_on_unavailable(monkeypatch):
 
     monkeypatch.setattr(kg.enrichment, "ai_topic_vocabulary", boom)
     assert kg._ai_ranked_prepend(None, {"id": "u1"}, "travel", set()) == []
+
+
+# ---------------------------------------------------------------------------
+# Bridge topics via AI (premium) with template fallback (free)
+# ---------------------------------------------------------------------------
+def test_ai_bridge_topics_shape(monkeypatch):
+    _patch_enrich(monkeypatch, {"topics": [
+        {"title": "Регистрация на рейс", "reason": "продолжает тему путешествий",
+         "starter_words": ["check-in", "boarding", "", "gate"]},
+        {"title": "", "reason": "x"},  # dropped
+    ]})
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    topics = enrich.ai_bridge_topics(None, user, "travel", ["airport", "ticket"])
+    assert len(topics) == 1
+    assert topics[0]["title"] == "Регистрация на рейс"
+    assert topics[0]["starter_words"] == ["check-in", "boarding", "gate"]  # empty dropped
+
+
+def test_kg_bridge_topics_uses_ai_for_premium(monkeypatch):
+    monkeypatch.setattr(
+        kg.enrichment, "ai_bridge_topics",
+        lambda conn, user, topic, related: [
+            {"title": "Заказ еды в кафе", "reason": "смежная ситуация", "starter_words": ["menu", "order"]},
+        ],
+    )
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    ranked = [{"word": "food", "pos": "noun"}, {"word": "eat", "pos": "verb"}]
+    bridges = kg.kg_build_bridge_topics(None, user, "restaurant", ranked)
+    assert bridges[0]["bridge_topic"] == "Заказ еды в кафе"
+    assert bridges[0]["reason"] == "смежная ситуация"
+    assert bridges[0]["starter_words"] == ["menu", "order"]
+
+
+def test_kg_bridge_topics_template_for_free():
+    user = {"id": "u1", "plan": "free"}
+    ranked = [{"word": "food", "pos": "noun"}, {"word": "eat", "pos": "verb"}]
+    bridges = kg.kg_build_bridge_topics(None, user, "restaurant", ranked)
+    # template path: non-empty, generic "<word> situations" style, no reason
+    assert bridges
+    assert all(b["reason"] == "" for b in bridges)
+
+
+def test_kg_bridge_topics_ai_failure_falls_back(monkeypatch):
+    def boom(conn, user, topic, related):
+        raise kg.LLMUnavailable("down")
+
+    monkeypatch.setattr(kg.enrichment, "ai_bridge_topics", boom)
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    ranked = [{"word": "food", "pos": "noun"}]
+    bridges = kg.kg_build_bridge_topics(None, user, "restaurant", ranked)
+    assert bridges  # fell back to template

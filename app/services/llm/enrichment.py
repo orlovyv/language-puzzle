@@ -153,6 +153,31 @@ def ai_topic_vocabulary(conn, user, topic: str, known_terms: list[str]) -> list[
     return cleaned
 
 
+def ai_bridge_topics(conn, user, topic: str, related_words: list[str]) -> list[dict[str, Any]]:
+    payload = prompts.bridge_topics_user_prompt(topic, related_words)
+    result = _run_cached(conn, user, "bridge_topics", payload, prompts.BRIDGE_TOPICS_SYSTEM, payload)
+    topics = result.get("topics")
+    if not isinstance(topics, list) or not topics:
+        raise LLMUnavailable("empty bridge topics")
+    cleaned = []
+    for item in topics:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()
+        if not title:
+            continue
+        starters = item.get("starter_words")
+        cleaned.append({
+            "title": title[:80],
+            "reason": str(item.get("reason") or "").strip()[:200],
+            "starter_words": [str(s).strip()[:40] for s in starters if str(s).strip()][:4]
+            if isinstance(starters, list) else [],
+        })
+    if not cleaned:
+        raise LLMUnavailable("no usable bridge topics")
+    return cleaned[:6]
+
+
 def ai_anki_card(conn, user, text: str, translation: str, pos: str | None = None) -> dict[str, Any]:
     payload = prompts.anki_card_user_prompt(text, translation, pos)
     result = _run_cached(conn, user, "anki_card", payload, prompts.ANKI_CARD_SYSTEM, payload)

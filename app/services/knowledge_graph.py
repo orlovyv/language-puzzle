@@ -297,7 +297,22 @@ def kg_build_phrasal_verbs(conn, ranked: list[dict[str, Any]], language: str = "
     return [phrase for _score, phrase in candidates[:8]]
 
 
-def kg_build_bridge_topics(topic: str, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def kg_build_bridge_topics(conn, user: dict[str, Any], topic: str, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    # Premium: AI-crafted, vivid bridge situations (titles + reason + seed words).
+    if enrichment._is_premium(user):
+        related = [item["word"] for item in ranked[:20] if item.get("word")]
+        try:
+            ai_topics = enrichment.ai_bridge_topics(conn, user, topic, related)
+            logger.info("KG AI bridge topics: %d for %r", len(ai_topics), topic)
+            return [
+                {"bridge_topic": t["title"], "reason": t.get("reason", ""),
+                 "starter_words": t.get("starter_words", [])}
+                for t in ai_topics
+            ]
+        except LLMUnavailable as exc:
+            logger.info("KG AI bridge topics unavailable for %r — %s", topic, exc)
+
+    # Free / fallback: simple template from ranked seed words.
     topic_terms = set(kg_normalize_phrase(topic).split())
     seeds = [
         item
@@ -506,7 +521,7 @@ def build_kg_context(
             units.append(unit)
 
     bridges = []
-    for bridge in kg_build_bridge_topics(topic, ranked):
+    for bridge in kg_build_bridge_topics(conn, user, topic, ranked):
         bridge_id = f"{context_id}:bridge:{topic_slug(bridge['bridge_topic'])}"
         bridges.append({
             "id": bridge_id,
@@ -519,7 +534,7 @@ def build_kg_context(
             "coverage_percent": 0,
             "phrases_count": 0,
             "document_id": document_id,
-            "shared": [],
+            "shared": bridge.get("starter_words", []),
         })
 
     return context_payload(
