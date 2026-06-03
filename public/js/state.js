@@ -73,6 +73,7 @@ export const state = {
   aiCardLoadingIds: new Set(),
   ttsVoices: [],
   selectedWord: null,
+  mobileSheetHeight: null,
   wordsVisibleCount: 100,
   pendingRegistrationEmail: "",
   message: ""
