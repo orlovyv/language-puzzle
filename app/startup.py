@@ -14,6 +14,7 @@ from app.config import (
     DEMO_EMAIL,
     DEMO_PASSWORD,
     MUSE_DICTIONARY,
+    PHRASE_DICTIONARY_SEED,
     USE_WORDNET_FALLBACK,
     WORDNET_ARCHIVE,
 )
@@ -46,6 +47,37 @@ def ensure_database_exists() -> None:
 def seed_demo_user() -> None:
     with db() as conn:
         user_repository.upsert_demo_user(conn, "u_demo", DEMO_EMAIL, hash_password(DEMO_PASSWORD))
+
+
+def import_phrase_dictionary_if_needed() -> None:
+    """Load the phrasal verbs / fixed expressions seed once, if the table is empty.
+
+    Powers the "Устойчивые выражения" detection in analysis and the phrasal-verb
+    suggestions in Knowledge. TSV columns: language, type, base_form, translation_ru.
+    """
+    if not PHRASE_DICTIONARY_SEED.exists():
+        return
+    with db() as conn:
+        if lexicon_repository.phrase_dictionary_count(conn) > 0:
+            return
+        rows: list[tuple[str, str, str, str]] = []
+        seen: set[tuple[str, str, str]] = set()
+        with PHRASE_DICTIONARY_SEED.open("r", encoding="utf-8") as file:
+            for line in file:
+                parts = line.rstrip("\n").split("\t")
+                if len(parts) < 4:
+                    continue
+                language, phrase_type, base_form, translation = parts[0], parts[1], parts[2], parts[3]
+                base_form = base_form.strip()
+                if not base_form:
+                    continue
+                key = (language, base_form, phrase_type)
+                if key in seen:
+                    continue
+                seen.add(key)
+                rows.append((language, base_form, phrase_type, translation.strip()))
+        if rows:
+            lexicon_repository.bulk_insert_phrase_dictionary(conn, rows)
 
 
 def import_muse_if_needed() -> None:
@@ -144,6 +176,7 @@ def startup() -> None:
     open_pool()
     run_migrations()
     seed_demo_user()
+    import_phrase_dictionary_if_needed()
     import_muse_if_needed()
     if USE_WORDNET_FALLBACK:
         import_wordnet_if_needed()

@@ -8,6 +8,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PUBLIC_DIR = BASE_DIR / "public"
 WORDNET_ARCHIVE = BASE_DIR / "wn3.1.dict.tar.gz"
 MUSE_DICTIONARY = BASE_DIR / "data" / "dictionaries" / "muse-en-ru.txt"
+PHRASE_DICTIONARY_SEED = BASE_DIR / "data" / "dictionaries" / "phrase-dictionary.tsv"
 MIGRATIONS_DIR = BASE_DIR / "migrations"
 
 
