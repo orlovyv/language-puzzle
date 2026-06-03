@@ -227,8 +227,30 @@ def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> 
             back_parts.append(f"<span style=\"color:#3b4b5c;\">Пример: {html.escape(example_translation)}</span>")
         card = _ai_anki_card(conn, user, text, clean_export_translation(unit.get("translation_ru")), part_of_speech)
         if card:
+            forms = card.get("verb_forms") or {}
+            form_values = [forms.get("base"), forms.get("past"), forms.get("participle")]
+            form_values = [v for v in form_values if v]
+            if form_values:
+                back_parts.append(f"<span style=\"color:#667085;\">Формы: {html.escape(' — '.join(form_values))}</span>")
             if card.get("synonyms"):
                 back_parts.append(f"<span style=\"color:#667085;\">Синонимы: {html.escape(', '.join(card['synonyms']))}</span>")
+            meanings = card.get("other_meanings") or []
+            if meanings:
+                rendered = "; ".join(
+                    m["meaning"] + (f" ({m['note']})" if m.get("note") else "") for m in meanings if m.get("meaning")
+                )
+                if rendered:
+                    back_parts.append(f"<span style=\"color:#3b4b5c;\">Другие значения: {html.escape(rendered)}</span>")
+            examples = card.get("context_examples") or []
+            for ex in examples:
+                en = ex.get("en") or ""
+                ru = ex.get("ru") or ""
+                if en:
+                    back_parts.append(
+                        f"<span style=\"color:#3b4b5c;\">{html.escape(en)}"
+                        + (f" — {html.escape(ru)}" if ru else "")
+                        + "</span>"
+                    )
             if card.get("mnemonic"):
                 back_parts.append(f"<span style=\"color:#3b4b5c;\">Мнемоника: {html.escape(card['mnemonic'])}</span>")
             if card.get("context"):

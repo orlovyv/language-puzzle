@@ -178,14 +178,60 @@ def ai_bridge_topics(conn, user, topic: str, related_words: list[str]) -> list[d
     return cleaned[:6]
 
 
+def _clean_verb_forms(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    forms = {
+        "base": str(raw.get("base") or "").strip()[:60],
+        "past": str(raw.get("past") or "").strip()[:60],
+        "participle": str(raw.get("participle") or "").strip()[:60],
+    }
+    # Drop entirely if nothing meaningful was returned (non-verb).
+    return forms if any(forms.values()) else {}
+
+
+def _clean_other_meanings(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for item in raw:
+        if isinstance(item, dict):
+            meaning = str(item.get("meaning") or "").strip()
+            note = str(item.get("note") or "").strip()
+        else:
+            meaning, note = str(item or "").strip(), ""
+        if meaning:
+            cleaned.append({"meaning": meaning[:200], "note": note[:200]})
+    return cleaned[:3]
+
+
+def _clean_context_examples(raw: Any) -> list[dict[str, str]]:
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        en = str(item.get("en") or "").strip()
+        if not en:
+            continue
+        cleaned.append({"en": en[:300], "ru": str(item.get("ru") or "").strip()[:300]})
+    return cleaned[:3]
+
+
 def ai_anki_card(conn, user, text: str, translation: str, pos: str | None = None) -> dict[str, Any]:
     payload = prompts.anki_card_user_prompt(text, translation, pos)
-    result = _run_cached(conn, user, "anki_card", payload, prompts.ANKI_CARD_SYSTEM, payload)
+    # task "card_v2": new schema (forms/meanings/examples); old "anki_card" cache
+    # entries are ignored so cards regenerate with the richer fields.
+    result = _run_cached(conn, user, "card_v2", payload, prompts.ANKI_CARD_SYSTEM, payload)
     synonyms = result.get("synonyms")
     return {
         "mnemonic": str(result.get("mnemonic") or "").strip()[:300],
         "synonyms": [str(s).strip()[:60] for s in synonyms if str(s).strip()][:4] if isinstance(synonyms, list) else [],
         "context": str(result.get("context") or "").strip()[:300],
+        "verb_forms": _clean_verb_forms(result.get("verb_forms")),
+        "other_meanings": _clean_other_meanings(result.get("other_meanings")),
+        "context_examples": _clean_context_examples(result.get("context_examples")),
     }
 
 

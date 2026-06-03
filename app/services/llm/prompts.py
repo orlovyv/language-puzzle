@@ -31,8 +31,19 @@ TOPIC_VOCAB_SYSTEM = (
 
 ANKI_CARD_SYSTEM = (
     "You are building a rich Anki flashcard for an English word/phrase. Return "
-    'ONLY a JSON object {"mnemonic": "...", "synonyms": ["..."], "context": "..."}: '
-    "a short Russian mnemonic, up to 4 English synonyms, and a short Russian usage note."
+    "ONLY a JSON object with these keys:\n"
+    '{"mnemonic": "...", "synonyms": ["..."], "context": "...", '
+    '"verb_forms": {"base": "...", "past": "...", "participle": "..."}, '
+    '"other_meanings": [{"meaning": "<RU>", "note": "<RU, optional>"}], '
+    '"context_examples": [{"en": "...", "ru": "..."}]}\n'
+    "- mnemonic: short Russian mnemonic.\n"
+    "- synonyms: up to 4 English synonyms.\n"
+    "- context: short Russian usage note.\n"
+    "- verb_forms: ONLY if the term is a verb — base, past simple, past participle "
+    "(e.g. go/went/gone). Omit or use empty strings for non-verbs.\n"
+    "- other_meanings: up to 3 OTHER Russian meanings (besides the given translation).\n"
+    "- context_examples: up to 3 example sentences in DIFFERENT contexts, each with "
+    "English 'en' and Russian 'ru'."
 )
 
 BRIDGE_TOPICS_SYSTEM = (
