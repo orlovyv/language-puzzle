@@ -155,7 +155,8 @@ def ai_topic_vocabulary(conn, user, topic: str, known_terms: list[str]) -> list[
 
 def ai_bridge_topics(conn, user, topic: str, related_words: list[str]) -> list[dict[str, Any]]:
     payload = prompts.bridge_topics_user_prompt(topic, related_words)
-    result = _run_cached(conn, user, "bridge_topics", payload, prompts.BRIDGE_TOPICS_SYSTEM, payload)
+    # task bumped to _en so cached Russian titles are regenerated in English.
+    result = _run_cached(conn, user, "bridge_topics_en", payload, prompts.BRIDGE_TOPICS_SYSTEM, payload)
     topics = result.get("topics")
     if not isinstance(topics, list) or not topics:
         raise LLMUnavailable("empty bridge topics")

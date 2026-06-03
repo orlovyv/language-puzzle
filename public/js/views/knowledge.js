@@ -85,20 +85,17 @@ function renderKnowledgeToken(item, selected) {
   const status = item.status || "unknown";
   const active = selected && unitKey(item) === unitKey(selected);
   const nextStatus = status === "known" ? "unknown" : "known";
-  const isAi = item.source === "ai";
-  // For AI-picked words, prefer the AI explanation as the tooltip.
-  const tip = isAi && item.why ? item.why : translationTooltip(item.translation_ru);
   return `
     <button
-      class="cloud-token ${status} ${active ? "active" : ""} ${isAi ? "ai-pick" : ""}"
+      class="cloud-token ${status} ${active ? "active" : ""}"
       data-kg-key="${escapeHtml(unitKey(item))}"
       data-kg-status="${item.knowledge_id}"
       data-kind="${kind}"
       data-status="${nextStatus}"
       data-tooltip-kind="${kind}"
       data-tooltip-id="${escapeHtml(item.knowledge_id || "")}"
-      title="${escapeHtml(tip)}"
-    >${escapeHtml(item.text)}${isAi ? `<sup class="ai-badge" title="Подобрано ИИ">AI</sup>` : ""}</button>
+      title="${escapeHtml(translationTooltip(item.translation_ru))}"
+    >${escapeHtml(item.text)}</button>
   `;
 }
 
@@ -121,7 +118,6 @@ export function renderKnowledgeDetail(item) {
     ${item.kind === "word"
       ? `<p class="meta">Часть речи: ${escapeHtml(posLabel(item.part_of_speech))}</p>`
       : `<p class="meta">Устойчивое выражение / фразовый глагол</p>`}
-    ${item.source === "ai" && item.why ? `<p class="meta ai-why">✦ ИИ: ${escapeHtml(item.why)}</p>` : ""}
     ${example ? `<div><strong>Пример:</strong><ul class="detail-examples"><li><span>${escapeHtml(example)}</span>${renderTtsButton(example, "Озвучить пример", "mini")}</li></ul></div>` : ""}
     ${renderAiCard(item)}
   `;
