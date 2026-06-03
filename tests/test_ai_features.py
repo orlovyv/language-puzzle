@@ -110,33 +110,6 @@ def test_ai_card_examples_require_en(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Stage 3: KG marks AI-picked words with source/why
-# ---------------------------------------------------------------------------
-def test_kg_ai_prepend_marks_source(monkeypatch):
-    monkeypatch.setattr(
-        kg.enrichment, "ai_topic_vocabulary",
-        lambda conn, user, topic, known: [
-            {"word": "airport", "translation": "аэропорт", "why": "ключевое для темы"},
-            {"word": "hotel", "translation": "отель", "why": ""},  # filtered: in known_terms
-            {"word": "boarding pass", "translation": "x", "why": ""},  # filtered: multi-word
-        ],
-    )
-    ranked = kg._ai_ranked_prepend(None, {"id": "u1"}, "travel", {"hotel"})
-    assert len(ranked) == 1
-    assert ranked[0]["word"] == "airport"
-    assert ranked[0]["source"] == "ai"
-    assert ranked[0]["why"] == "ключевое для темы"
-
-
-def test_kg_ai_prepend_empty_on_unavailable(monkeypatch):
-    def boom(conn, user, topic, known):
-        raise kg.LLMUnavailable("down")
-
-    monkeypatch.setattr(kg.enrichment, "ai_topic_vocabulary", boom)
-    assert kg._ai_ranked_prepend(None, {"id": "u1"}, "travel", set()) == []
-
-
-# ---------------------------------------------------------------------------
 # Bridge topics via AI (premium) with template fallback (free)
 # ---------------------------------------------------------------------------
 def test_ai_bridge_topics_shape(monkeypatch):

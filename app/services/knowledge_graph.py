@@ -33,28 +33,6 @@ from app.services.llm.client import LLMUnavailable
 from app.utils.security import token_id
 
 
-def _ai_ranked_prepend(conn, user: dict[str, Any], topic: str, known_terms: set[str]) -> list[dict[str, Any]]:
-    """Premium: AI-curated topical words, shaped like kg_rank_related_words items.
-
-    Returns [] when AI is unavailable so the caller uses pure frequency ranking.
-    Score 1.0 ensures AI picks lead the ranked list.
-    """
-    try:
-        items = enrichment.ai_topic_vocabulary(conn, user, topic, sorted(known_terms))
-    except LLMUnavailable as exc:
-        logger.info("KG AI vocabulary unavailable for topic %r — %s", topic, exc)
-        return []
-    ranked: list[dict[str, Any]] = []
-    for item in items:
-        word = kg_normalize_phrase(item["word"])
-        if not word or " " in word or word in known_terms:
-            continue
-        ranked.append({"word": word, "pos": "noun", "score": 1.0, "frequency": kg_wordfreq(word),
-                       "semantic": 1.0, "usefulness": 1.0,
-                       "source": "ai", "why": item.get("why", "")})
-    logger.info("KG AI vocabulary added %d words for topic %r", len(ranked), topic)
-    return ranked
-
 try:
     import numpy as np
 except ImportError:  # pragma: no cover
@@ -357,9 +335,6 @@ def kg_unit_from_word(conn, user: dict[str, Any], item: dict[str, Any], example:
         "score": round(float(item.get("score") or 0) * 100, 2),
         "count": 1,
         "frequency_rank": word["frequency_rank"],
-        # Carry AI provenance so the UI can badge AI-picked vocabulary.
-        "source": item.get("source") or "frequency",
-        "why": item.get("why") or "",
     }
 
 
@@ -485,16 +460,14 @@ def build_kg_context(
     topic = kg_title_topic(title or kg_infer_topic_label(raw_input))
     known_terms = {row["lemma"] for row in word_repository.known_lemmas(conn, user["id"])}
     known_terms.update({row["base_form"] for row in phrase_repository.known_phrase_base_forms(conn, user["id"])})
+    # Vocabulary always comes from our frequency/semantic ranking (free and
+    # premium alike); AI is used only for bridge topics.
     ranked = kg_rank_related_words(
         raw_input or topic,
         excluded_words=known_terms,
         blocked_single_words=system_terms(conn, "kg_blocked_single_word"),
         blocked_entity_labels=system_terms(conn, "kg_blocked_entity_label"),
     )
-    # Premium: lead with AI-curated topical vocabulary; free path is unchanged.
-    ai_ranked = _ai_ranked_prepend(conn, user, topic, known_terms)
-    if ai_ranked:
-        ranked = ai_ranked + [item for item in ranked if item["word"] not in {a["word"] for a in ai_ranked}]
     units: list[dict[str, Any]] = []
     seen: set[str] = set()
     for item in ranked:

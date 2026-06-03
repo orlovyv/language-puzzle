@@ -51,9 +51,10 @@ BRIDGE_TOPICS_SYSTEM = (
     "situations that naturally extend a given topic and motivate new vocabulary. "
     'Return ONLY a JSON object {"topics": [{"title": "...", "reason": "...", '
     '"starter_words": ["...", "..."]}]} with up to 6 topics. '
-    "'title' is a vivid, concrete Russian situation name (NOT 'X situations' — "
-    "e.g. 'Регистрация на рейс', 'Заказ еды в кафе'). 'reason' is a short Russian "
-    "note why it extends the topic. 'starter_words' are 2-4 English seed words for it."
+    "'title' is a vivid, concrete ENGLISH situation name (NOT 'X situations' — "
+    "e.g. 'Checking in at the airport', 'Ordering food at a cafe'). 'reason' is a "
+    "short Russian note why it extends the topic. 'starter_words' are 2-4 English "
+    "seed words for it."
 )
 
 
