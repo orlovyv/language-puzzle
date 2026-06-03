@@ -106,7 +106,11 @@ function bindSharedEvents() {
     button.addEventListener("click", async () => {
       const knowledgeId = button.dataset.aiCard;
       const kind = button.dataset.aiKind === "phrase" ? "user-phrases" : "user-words";
+      // Keep the reader where it is: re-rendering rebuilds the DOM and would
+      // otherwise reset the scroll back to the top of the text.
+      const readerScrollTop = document.querySelector(".document-reader")?.scrollTop ?? null;
       state.aiCardLoadingIds.add(knowledgeId);
+      pendingReaderScrollTop = readerScrollTop;
       renderApp();
       try {
         const { card } = await api(`/api/${kind}/${knowledgeId}/enrich`, { method: "POST" });
@@ -119,6 +123,7 @@ function bindSharedEvents() {
         state.message = error.message || "AI-подсказки недоступны.";
       } finally {
         state.aiCardLoadingIds.delete(knowledgeId);
+        pendingReaderScrollTop = readerScrollTop;
         renderApp();
       }
     });
@@ -223,6 +228,53 @@ function bindDocumentEvents() {
       renderApp();
     });
   });
+
+  bindMobileSheetDrag();
+}
+
+// Mobile word card is a fixed bottom sheet. Let the grabber be dragged upward to
+// reveal more of the card; the dragged height persists across re-renders so it
+// survives e.g. tapping the AI-подсказки button.
+function bindMobileSheetDrag() {
+  const sheet = document.querySelector(".mobile-mode .side-panel.word-detail");
+  const grabber = sheet?.querySelector("[data-sheet-grabber]");
+  if (!sheet || !grabber) return;
+
+  const baseHeight = parseInt(getComputedStyle(sheet).getPropertyValue("--mobile-sheet-height"), 10) || 132;
+  const maxHeight = () => Math.round(window.innerHeight * 0.85);
+  const apply = (height) => {
+    sheet.style.height = `${height}px`;
+    sheet.style.maxHeight = `${height}px`;
+  };
+
+  // Reapply a previously dragged height after the DOM was rebuilt.
+  if (state.mobileSheetHeight) apply(Math.min(maxHeight(), Math.max(baseHeight, state.mobileSheetHeight)));
+
+  let startY = 0;
+  let startHeight = 0;
+  let dragging = false;
+
+  grabber.addEventListener("touchstart", (event) => {
+    dragging = true;
+    startY = event.touches[0].clientY;
+    startHeight = sheet.getBoundingClientRect().height;
+  }, { passive: true });
+
+  grabber.addEventListener("touchmove", (event) => {
+    if (!dragging) return;
+    const delta = startY - event.touches[0].clientY; // dragging up grows the sheet
+    const next = Math.min(maxHeight(), Math.max(baseHeight, startHeight + delta));
+    apply(next);
+    event.preventDefault();
+  }, { passive: false });
+
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    state.mobileSheetHeight = Math.round(sheet.getBoundingClientRect().height);
+  };
+  grabber.addEventListener("touchend", end);
+  grabber.addEventListener("touchcancel", end);
 }
 
 function bindAnalysisEvents() {

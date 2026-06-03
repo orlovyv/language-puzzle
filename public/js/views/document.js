@@ -41,6 +41,7 @@ function renderWordDetail(word) {
   const transcription = cleanTranscription(word.transcription);
   const examples = cleanExample(word.example) ? [cleanExample(word.example)] : [];
   return `
+    <div class="sheet-grabber" data-sheet-grabber aria-hidden="true"><span></span></div>
     <div class="detail-title">
       <h2>${escapeHtml(label)} <span class="pill status-${word.status}">${statusText(word.status)}</span></h2>
       ${renderTtsButton(label, `Озвучить ${label}`)}
