@@ -130,6 +130,24 @@ def phrase_dictionary(conn, language: str = "en") -> list[dict[str, Any]]:
     )
 
 
+def phrase_dictionary_count(conn) -> int:
+    row = query_one(conn, "select count(*)::int as count from phrase_dictionary")
+    return row["count"] if row else 0
+
+
+def bulk_insert_phrase_dictionary(conn, rows: list[tuple[str, str, str, str]]) -> None:
+    """rows: (language, base_form, type, translation_ru)."""
+    with conn.cursor() as cur:
+        cur.executemany(
+            """
+            insert into phrase_dictionary (language, base_form, type, translation_ru, source)
+            values (%s, %s, %s, %s, 'seed')
+            on conflict (language, base_form, type) do nothing
+            """,
+            rows,
+        )
+
+
 def phrase_translation_by_type(conn, language: str, base_form: str, phrase_type: str) -> dict[str, Any] | None:
     return query_one(
         conn,
