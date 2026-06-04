@@ -7,6 +7,7 @@ Every prompt instructs the model to return a strict JSON object so the client's
 from __future__ import annotations
 
 import json
+from typing import Any
 
 TRANSLATE_SYSTEM = (
     "You are a precise EN->RU lexicographer. Return ONLY a JSON object "
@@ -46,6 +47,27 @@ ANKI_CARD_SYSTEM = (
     "English 'en' and Russian 'ru'."
 )
 
+ANKI_CARDS_BATCH_SYSTEM = (
+    "You are building rich Anki flashcards for a BATCH of English words/phrases. "
+    'You receive a JSON object {"terms": [{"term": "...", "translation": "...", '
+    '"part_of_speech": "..."}]}. Return ONLY a JSON object {"cards": [...]} where '
+    "each element corresponds to ONE input term and has these keys:\n"
+    '{"term": "<exactly the input term>", "mnemonic": "...", "synonyms": ["..."], '
+    '"context": "...", "verb_forms": {"base": "...", "past": "...", "participle": "..."}, '
+    '"other_meanings": [{"meaning": "<RU>", "note": "<RU, optional>"}], '
+    '"context_examples": [{"en": "...", "ru": "..."}]}\n'
+    "- term: copy the input term EXACTLY so it can be matched back.\n"
+    "- mnemonic: short Russian mnemonic.\n"
+    "- synonyms: up to 4 English synonyms.\n"
+    "- context: short Russian usage note.\n"
+    "- verb_forms: ONLY if the term is a verb — base, past simple, past participle "
+    "(e.g. go/went/gone). Omit or use empty strings for non-verbs.\n"
+    "- other_meanings: up to 3 OTHER Russian meanings (besides the given translation).\n"
+    "- context_examples: up to 3 example sentences in DIFFERENT contexts, each with "
+    "English 'en' and Russian 'ru'.\n"
+    "Return exactly one card object per input term, preserving their order."
+)
+
 BRIDGE_TOPICS_SYSTEM = (
     "You design 'bridge topics' for an English learner: adjacent real-life "
     "situations that naturally extend a given topic and motivate new vocabulary. "
@@ -79,6 +101,22 @@ def topic_vocab_user_prompt(topic: str, known_terms: list[str]) -> str:
 def anki_card_user_prompt(text: str, translation: str, pos: str | None) -> str:
     return json.dumps(
         {"term": text, "translation": translation or "", "part_of_speech": pos or ""},
+        ensure_ascii=False,
+    )
+
+
+def anki_cards_batch_user_prompt(items: list[dict[str, Any]]) -> str:
+    return json.dumps(
+        {
+            "terms": [
+                {
+                    "term": item.get("text") or "",
+                    "translation": item.get("translation") or "",
+                    "part_of_speech": item.get("pos") or "",
+                }
+                for item in items
+            ]
+        },
         ensure_ascii=False,
     )
 

@@ -175,14 +175,39 @@ def anki_filename(title: str) -> str:
     return (slug or "learn_block")[:80] + "_anki.txt"
 
 
-def _ai_anki_card(conn, user, text: str, translation: str, pos: str | None) -> dict[str, Any] | None:
-    """Premium AI card enrichment, or None if unavailable."""
+# Secondary back lines share the transcription/example font size so the AI
+# block no longer renders larger than the rest of the card.
+_ANKI_DETAIL_STYLE = "font-size:15px;"
+# Visible divider between logical information blocks on the back of the card.
+_ANKI_BLOCK_SEPARATOR = '<div style="border-top:1px solid #e4e9f0;margin:8px 0;"></div>'
+
+
+def _anki_back_block(lines: list[str]) -> str:
+    """Wrap a group of back lines in a left-aligned block."""
+    return f'<div style="text-align:left;">{"<br>".join(lines)}</div>'
+
+
+def _ai_anki_cards_batch(conn, user, units: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Premium AI enrichment for the whole block in as few LLM calls as possible.
+
+    Returns a ``text.lower() -> card`` mapping; empty when AI is unavailable.
+    """
     if conn is None or user is None:
-        return None
+        return {}
+    items = []
+    for unit in units:
+        text = str(unit.get("text") or "").strip()
+        if not text:
+            continue
+        items.append({
+            "text": text,
+            "translation": clean_export_translation(unit.get("translation_ru")),
+            "pos": str(unit.get("part_of_speech") or "").strip(),
+        })
     try:
-        return enrichment.ai_anki_card(conn, user, text, translation, pos=pos)
+        return enrichment.ai_anki_cards_batch(conn, user, items)
     except LLMUnavailable:
-        return None
+        return {}
 
 
 def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> str:
@@ -191,6 +216,9 @@ def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> 
         for unit in filter_learn_units_for_frequency(block.get("units") or [], block.get("frequency_filter") or "all")
         if unit.get("status") not in {"known", "ignored"}
     ]
+    # Enrich the whole block at once instead of one network call per word.
+    cards_by_text = _ai_anki_cards_batch(conn, user, units)
+
     output = io.StringIO()
     output.write("#separator:tab\n")
     output.write("#html:true\n")
@@ -206,6 +234,7 @@ def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> 
         translation = clean_export_translation(unit.get("translation_ru")) or "Перевод не найден"
         transcription = clean_transcription_for_export(unit.get("transcription"))
         example = anki_bold_term(unit.get("example") or "", text)
+        # Front stays centred (Anki default): word, transcription, first example.
         word_line = f"<span style=\"font-size:22px;font-weight:700;\"><b>{html.escape(text)}</b></span>"
         details = []
         if transcription:
@@ -218,44 +247,64 @@ def build_learn_block_anki_text(block: dict[str, Any], conn=None, user=None) -> 
         tts_text = " <break time=\"1000ms\"/> ".join([html.escape(part) for part in tts_parts if part])
         tts_line = f"[anki:tts lang=en_US]{tts_text}[/anki:tts]" if tts_text else ""
         front = "<br>".join([part for part in [word_line, *details, tts_line] if part])
-        back_parts = [html.escape(translation)]
+
+        # Back: meaning + AI enrichment, grouped into left-aligned blocks with a
+        # visible divider between blocks.
         part_of_speech = str(unit.get("part_of_speech") or "").strip()
+        blocks: list[list[str]] = []
+
+        meaning = [html.escape(translation)]
         if part_of_speech:
-            back_parts.append(f"<span style=\"color:#667085;\">{html.escape(part_of_speech)}</span>")
+            meaning.append(f"<span style=\"{_ANKI_DETAIL_STYLE}color:#667085;\">{html.escape(part_of_speech)}</span>")
+        blocks.append(meaning)
+
         example_translation = anki_example_translation(unit.get("example") or "")
         if example_translation:
-            back_parts.append(f"<span style=\"color:#3b4b5c;\">Пример: {html.escape(example_translation)}</span>")
-        card = _ai_anki_card(conn, user, text, clean_export_translation(unit.get("translation_ru")), part_of_speech)
+            blocks.append([f"<span style=\"{_ANKI_DETAIL_STYLE}color:#3b4b5c;\">Пример: {html.escape(example_translation)}</span>"])
+
+        card = cards_by_text.get(text.lower())
         if card:
+            grammar = []
             forms = card.get("verb_forms") or {}
-            form_values = [forms.get("base"), forms.get("past"), forms.get("participle")]
-            form_values = [v for v in form_values if v]
+            form_values = [v for v in (forms.get("base"), forms.get("past"), forms.get("participle")) if v]
             if form_values:
-                back_parts.append(f"<span style=\"color:#667085;\">Формы: {html.escape(' — '.join(form_values))}</span>")
+                grammar.append(f"<span style=\"{_ANKI_DETAIL_STYLE}color:#667085;\">Формы: {html.escape(' — '.join(form_values))}</span>")
             if card.get("synonyms"):
-                back_parts.append(f"<span style=\"color:#667085;\">Синонимы: {html.escape(', '.join(card['synonyms']))}</span>")
+                grammar.append(f"<span style=\"{_ANKI_DETAIL_STYLE}color:#667085;\">Синонимы: {html.escape(', '.join(card['synonyms']))}</span>")
+            if grammar:
+                blocks.append(grammar)
+
             meanings = card.get("other_meanings") or []
             if meanings:
                 rendered = "; ".join(
                     m["meaning"] + (f" ({m['note']})" if m.get("note") else "") for m in meanings if m.get("meaning")
                 )
                 if rendered:
-                    back_parts.append(f"<span style=\"color:#3b4b5c;\">Другие значения: {html.escape(rendered)}</span>")
-            examples = card.get("context_examples") or []
-            for ex in examples:
+                    blocks.append([f"<span style=\"{_ANKI_DETAIL_STYLE}color:#3b4b5c;\">Другие значения: {html.escape(rendered)}</span>"])
+
+            example_lines = []
+            for ex in card.get("context_examples") or []:
                 en = ex.get("en") or ""
                 ru = ex.get("ru") or ""
                 if en:
-                    back_parts.append(
-                        f"<span style=\"color:#3b4b5c;\">{html.escape(en)}"
+                    example_lines.append(
+                        f"<span style=\"{_ANKI_DETAIL_STYLE}color:#3b4b5c;\">{html.escape(en)}"
                         + (f" — {html.escape(ru)}" if ru else "")
                         + "</span>"
                     )
+            if example_lines:
+                blocks.append(example_lines)
+
+            notes = []
             if card.get("mnemonic"):
-                back_parts.append(f"<span style=\"color:#3b4b5c;\">Мнемоника: {html.escape(card['mnemonic'])}</span>")
+                notes.append(f"<span style=\"{_ANKI_DETAIL_STYLE}color:#3b4b5c;\">Мнемоника: {html.escape(card['mnemonic'])}</span>")
             if card.get("context"):
-                back_parts.append(f"<span style=\"color:#3b4b5c;\">{html.escape(card['context'])}</span>")
-        writer.writerow([front, "<br>".join(back_parts)])
+                notes.append(f"<span style=\"{_ANKI_DETAIL_STYLE}color:#3b4b5c;\">{html.escape(card['context'])}</span>")
+            if notes:
+                blocks.append(notes)
+
+        back = _ANKI_BLOCK_SEPARATOR.join(_anki_back_block(lines) for lines in blocks)
+        writer.writerow([front, back])
 
     text = output.getvalue()
     output.close()
