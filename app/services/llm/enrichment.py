@@ -220,20 +220,96 @@ def _clean_context_examples(raw: Any) -> list[dict[str, str]]:
     return cleaned[:3]
 
 
+def _shape_anki_card(result: dict[str, Any]) -> dict[str, Any]:
+    synonyms = result.get("synonyms") if isinstance(result, dict) else None
+    return {
+        "mnemonic": str((result or {}).get("mnemonic") or "").strip()[:300],
+        "synonyms": [str(s).strip()[:60] for s in synonyms if str(s).strip()][:4] if isinstance(synonyms, list) else [],
+        "context": str((result or {}).get("context") or "").strip()[:300],
+        "verb_forms": _clean_verb_forms((result or {}).get("verb_forms")),
+        "other_meanings": _clean_other_meanings((result or {}).get("other_meanings")),
+        "context_examples": _clean_context_examples((result or {}).get("context_examples")),
+    }
+
+
 def ai_anki_card(conn, user, text: str, translation: str, pos: str | None = None) -> dict[str, Any]:
     payload = prompts.anki_card_user_prompt(text, translation, pos)
     # task "card_v2": new schema (forms/meanings/examples); old "anki_card" cache
     # entries are ignored so cards regenerate with the richer fields.
     result = _run_cached(conn, user, "card_v2", payload, prompts.ANKI_CARD_SYSTEM, payload)
-    synonyms = result.get("synonyms")
-    return {
-        "mnemonic": str(result.get("mnemonic") or "").strip()[:300],
-        "synonyms": [str(s).strip()[:60] for s in synonyms if str(s).strip()][:4] if isinstance(synonyms, list) else [],
-        "context": str(result.get("context") or "").strip()[:300],
-        "verb_forms": _clean_verb_forms(result.get("verb_forms")),
-        "other_meanings": _clean_other_meanings(result.get("other_meanings")),
-        "context_examples": _clean_context_examples(result.get("context_examples")),
-    }
+    return _shape_anki_card(result)
+
+
+# How many terms to enrich per LLM call in the batch path. Keeps each request
+# small enough to stay fast and within JSON token limits, while collapsing what
+# used to be one network round-trip per word into one per chunk.
+ANKI_BATCH_SIZE = 12
+
+
+def _index_batch_cards(raw: Any) -> dict[str, dict[str, Any]]:
+    cards = raw.get("cards") if isinstance(raw, dict) else None
+    if not isinstance(cards, list):
+        return {}
+    indexed: dict[str, dict[str, Any]] = {}
+    for card in cards:
+        if not isinstance(card, dict):
+            continue
+        term = str(card.get("term") or "").strip().lower()
+        if term:
+            indexed[term] = card
+    return indexed
+
+
+def ai_anki_cards_batch(conn, user, items: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Enrich many Anki cards with as few LLM calls as possible.
+
+    ``items`` is a list of ``{"text", "translation", "pos"}``. Returns a mapping
+    of ``text.lower()`` -> shaped card for every term that could be enriched.
+
+    Cached terms cost nothing and never hit the network. The remaining terms are
+    sent to the LLM in chunks of ``ANKI_BATCH_SIZE`` (one quota charge per chunk)
+    and each result is cached individually under the same key as
+    :func:`ai_anki_card`, so single-card lookups share the cache. If the quota or
+    connection gives out mid-way, whatever was gathered so far is still returned.
+    """
+    results: dict[str, dict[str, Any]] = {}
+    if not is_configured() or not items:
+        return results
+
+    pending: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for item in items:
+        text = str(item.get("text") or "").strip()
+        if not text:
+            continue
+        translation = str(item.get("translation") or "")
+        pos = item.get("pos")
+        payload = prompts.anki_card_user_prompt(text, translation, pos)
+        key = _cache_key("card_v2", payload)
+        cached = ai_repository.get_cached(conn, key)
+        if cached is not None:
+            results[text.lower()] = _shape_anki_card(cached)
+            continue
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        pending.append({"text": text, "translation": translation, "pos": pos, "key": key})
+
+    for start in range(0, len(pending), ANKI_BATCH_SIZE):
+        chunk = pending[start:start + ANKI_BATCH_SIZE]
+        try:
+            _check_and_count_quota(conn, user)
+            raw = chat_json(prompts.ANKI_CARDS_BATCH_SYSTEM, prompts.anki_cards_batch_user_prompt(chunk))
+        except LLMUnavailable:
+            break  # quota exhausted or connection lost — keep what we have
+        by_term = _index_batch_cards(raw)
+        for entry in chunk:
+            card_raw = by_term.get(entry["text"].lower())
+            if not card_raw:
+                continue  # term omitted by the model — skip caching so it can retry
+            ai_repository.put_cached(conn, entry["key"], "card_v2", card_raw)
+            results[entry["text"].lower()] = _shape_anki_card(card_raw)
+    return results
 
 
 # UI alias: same enriched card (mnemonic/synonyms/context), shown on demand in

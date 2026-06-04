@@ -110,6 +110,61 @@ def test_ai_card_examples_require_en(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Batch Anki card enrichment
+# ---------------------------------------------------------------------------
+def test_ai_anki_cards_batch_one_call_and_cache(monkeypatch):
+    cache = _Cache()
+    calls = {"n": 0}
+
+    def fake_chat(system, prompt):
+        calls["n"] += 1
+        import json
+        terms = json.loads(prompt)["terms"]
+        return {"cards": [{"term": t["term"], "mnemonic": "m-" + t["term"], "synonyms": ["s"]} for t in terms]}
+
+    monkeypatch.setattr(enrich, "is_configured", lambda: True)
+    monkeypatch.setattr(enrich.ai_repository, "get_cached", cache.get)
+    monkeypatch.setattr(enrich.ai_repository, "put_cached", cache.put)
+    monkeypatch.setattr(enrich, "_check_and_count_quota", lambda conn, user: None)
+    monkeypatch.setattr(enrich, "chat_json", fake_chat)
+
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    items = [
+        {"text": "go", "translation": "идти", "pos": "verb"},
+        {"text": "cat", "translation": "кот", "pos": "noun"},
+        {"text": "go", "translation": "идти", "pos": "verb"},  # duplicate
+    ]
+    result = enrich.ai_anki_cards_batch(None, user, items)
+    assert calls["n"] == 1  # one batched call despite three items
+    assert set(result) == {"go", "cat"}  # deduped, lowercased keys
+    assert result["go"]["mnemonic"] == "m-go"
+
+    # A second run is served entirely from cache — no further LLM calls.
+    again = enrich.ai_anki_cards_batch(None, user, items)
+    assert calls["n"] == 1
+    assert again["cat"]["mnemonic"] == "m-cat"
+
+
+def test_ai_anki_cards_batch_stops_on_quota(monkeypatch):
+    cache = _Cache()
+    monkeypatch.setattr(enrich, "is_configured", lambda: True)
+    monkeypatch.setattr(enrich.ai_repository, "get_cached", cache.get)
+    monkeypatch.setattr(enrich.ai_repository, "put_cached", cache.put)
+    monkeypatch.setattr(enrich, "ANKI_BATCH_SIZE", 1)
+
+    def deny(conn, user):
+        raise enrich.LLMUnavailable("quota")
+
+    monkeypatch.setattr(enrich, "_check_and_count_quota", deny)
+    monkeypatch.setattr(enrich, "chat_json", lambda system, prompt: {"cards": []})
+
+    user = {"id": "u1", "plan": "premium", "premium_until": _future()}
+    items = [{"text": "go", "translation": "идти", "pos": "verb"}]
+    # Quota gone -> no cards, but it degrades gracefully instead of raising.
+    assert enrich.ai_anki_cards_batch(None, user, items) == {}
+
+
+# ---------------------------------------------------------------------------
 # Bridge topics via AI (premium) with template fallback (free)
 # ---------------------------------------------------------------------------
 def test_ai_bridge_topics_shape(monkeypatch):
