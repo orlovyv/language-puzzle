@@ -11,6 +11,7 @@ export function renderSettings() {
   const voices = ttsVoiceOptions(user.target_language);
   const isPremium = Boolean(state.user?.is_premium);
   const isAdmin = Boolean(state.user?.is_admin);
+  const donationMode = Boolean(state.user?.donation_mode);
   const mustChange = Boolean(state.user?.must_change_password);
   const premiumBadge = isPremium
     ? `<span class="pill known">Premium</span>`
@@ -21,10 +22,13 @@ export function renderSettings() {
   return `
     ${renderHeader("Настройки", "Языки MVP и учетная запись.")}
     ${mustChange ? `<section class="card notice must-change-banner">Вы вошли по временному паролю. Смените его ниже.</section>` : ""}
-      ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu">${adminMenuLink}<a class="settings-menu-link" data-link href="/premium"><span class="nav-icon">★</span><span>Premium</span></a><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
+      ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu">${adminMenuLink}<a class="settings-menu-link" data-link href="/premium"><span class="nav-icon">★</span><span>${donationMode ? "Поддержать" : "Premium"}</span></a><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
     <section class="card settings-card subscription-row">
-      <div><h2 class="settings-menu-title">Подписка</h2><p class="subtle">${isPremium ? "Premium активен — ИИ-функции включены." : "Бесплатный план."}</p></div>
-      <div class="toolbar">${premiumBadge}</div>
+      ${donationMode
+        ? `<div><h2 class="settings-menu-title">Поддержать разработчика</h2><p class="subtle">ИИ-функции включены для всех. Если проект полезен — поддержите его развитие.</p></div>
+           <div class="toolbar"><a data-link href="/premium"><button class="primary">Поддержать</button></a></div>`
+        : `<div><h2 class="settings-menu-title">Подписка</h2><p class="subtle">${isPremium ? "Premium активен — ИИ-функции включены." : "Бесплатный план."}</p></div>
+           <div class="toolbar">${premiumBadge}</div>`}
     </section>
     <form class="card form" id="settingsForm">
       <label class="label">Email<input value="${escapeHtml(state.user.email)}" disabled></label>

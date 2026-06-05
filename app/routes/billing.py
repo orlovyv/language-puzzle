@@ -16,10 +16,17 @@ from typing import Any
 from fastapi import APIRouter, Cookie, Form, Header, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
-from app.config import SUBSCRIPTION_PERIOD_DAYS, SUBSCRIPTION_PRICE_RUB
+from app.config import (
+    DONATION_DEFAULT_RUB,
+    DONATION_MAX_RUB,
+    DONATION_MIN_RUB,
+    DONATION_MODE,
+    SUBSCRIPTION_PERIOD_DAYS,
+    SUBSCRIPTION_PRICE_RUB,
+)
 from app.core.database import db
 from app.repositories import payment_repository, user_repository
-from app.schemas.user_schema import CheckoutPayload
+from app.schemas.user_schema import CheckoutPayload, DonationPayload
 from app.services.auth_service import public_user, require_user
 from app.services.billing import (
     provider,
@@ -40,6 +47,9 @@ def billing_status(lp_session: str | None = Cookie(default=None), authorization:
             "status": subscription_service.status_for(user),
             "price_rub": SUBSCRIPTION_PRICE_RUB,
             "period_days": SUBSCRIPTION_PERIOD_DAYS,
+            "donation_mode": DONATION_MODE,
+            "donation_default_rub": DONATION_DEFAULT_RUB,
+            "donation_min_rub": DONATION_MIN_RUB,
             "provider": provider.active_provider(),
             "available": provider.is_configured(),
             "payments": payment_repository.user_payments(conn, user["id"]),
@@ -78,6 +88,47 @@ def billing_checkout(
         return {"confirmation_url": payment["confirmation_url"], "payment_id": payment["id"]}
 
 
+@router.post("/api/billing/donate")
+def billing_donate(
+    payload: DonationPayload,
+    lp_session: str | None = Cookie(default=None),
+    authorization: str | None = Header(default=None),
+):
+    """Create a one-off "support the developer" donation payment.
+
+    Donations are recorded with ``period_days=0`` so the success callbacks know
+    not to grant a subscription (AI is already free for everyone).
+    """
+    with db() as conn:
+        user = require_user(conn, lp_session, authorization)
+        if not provider.is_configured():
+            raise HTTPException(status_code=503, detail="Оплата временно недоступна.")
+        amount = round(float(payload.amount), 2)
+        if amount < DONATION_MIN_RUB or amount > DONATION_MAX_RUB:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Сумма доната должна быть от {DONATION_MIN_RUB:g} до {DONATION_MAX_RUB:g} ₽.",
+            )
+        description = "Поддержка разработчика Language Puzzle"
+
+        if provider.active_provider() == "robokassa":
+            invoice_id = robokassa_client.new_invoice_id()
+            payment_repository.insert_payment(
+                conn, token_id("pay"), user["id"], str(invoice_id),
+                amount, "RUB", "pending", 0, provider="robokassa",
+            )
+            url = robokassa_client.build_payment_url(invoice_id, description, amount=amount)
+            return {"confirmation_url": url, "payment_id": str(invoice_id)}
+
+        # yookassa
+        payment = yookassa_client.create_donation_payment(user, amount, description=description)
+        payment_repository.insert_payment(
+            conn, token_id("pay"), user["id"], payment["id"],
+            payment["amount"], "RUB", payment["status"], 0, provider="yookassa",
+        )
+        return {"confirmation_url": payment["confirmation_url"], "payment_id": payment["id"]}
+
+
 @router.post("/api/billing/cancel")
 def billing_cancel(lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
     with db() as conn:
@@ -109,10 +160,12 @@ async def robokassa_result(
             raise HTTPException(status_code=404, detail="user not found")
 
         payment_repository.update_status(conn, InvId, "succeeded")
-        # Robokassa (simple flow) has no saved-method recurring => auto_renew off.
-        subscription_service.activate_subscription(
-            conn, user, period_days=record["period_days"], auto_renew=False
-        )
+        # period_days == 0 marks a donation — nothing to grant (AI is already free).
+        if record["period_days"]:
+            # Robokassa (simple flow) has no saved-method recurring => auto_renew off.
+            subscription_service.activate_subscription(
+                conn, user, period_days=record["period_days"], auto_renew=False
+            )
     return PlainTextResponse(f"OK{InvId}")
 
 
@@ -151,7 +204,9 @@ async def billing_webhook(request: Request):
         period_days = record["period_days"] if record else SUBSCRIPTION_PERIOD_DAYS
         if record:
             payment_repository.update_status(conn, payment_id, "succeeded")
-        subscription_service.activate_subscription(
-            conn, user, period_days=period_days, payment_method_id=verified.get("payment_method_id")
-        )
+        # period_days == 0 marks a donation — record it but grant no subscription.
+        if period_days:
+            subscription_service.activate_subscription(
+                conn, user, period_days=period_days, payment_method_id=verified.get("payment_method_id")
+            )
         return {"ok": True}

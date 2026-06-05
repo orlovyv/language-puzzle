@@ -64,6 +64,30 @@ def create_subscription_payment(user: dict[str, Any], description: str) -> dict[
     }
 
 
+def create_donation_payment(user: dict[str, Any], amount: float, description: str) -> dict[str, Any]:
+    """Create a one-off donation payment (no saved method, no recurring).
+
+    Returns {"id", "confirmation_url", "status", "amount"}.
+    """
+    _ensure_configured()
+    payment = Payment.create(
+        {
+            "amount": {"value": f"{amount:.2f}", "currency": "RUB"},
+            "confirmation": {"type": "redirect", "return_url": SUBSCRIPTION_RETURN_URL},
+            "capture": True,
+            "description": description,
+            "metadata": {"user_id": user["id"], "kind": "donation"},
+        },
+        str(uuid.uuid4()),  # idempotency key
+    )
+    return {
+        "id": payment.id,
+        "confirmation_url": getattr(payment.confirmation, "confirmation_url", None),
+        "status": payment.status,
+        "amount": float(payment.amount.value),
+    }
+
+
 def get_payment(payment_id: str) -> dict[str, Any]:
     _ensure_configured()
     payment = Payment.find_one(payment_id)

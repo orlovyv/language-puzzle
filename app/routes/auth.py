@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Cookie, Header, Request, Response
 
-from app.config import TURNSTILE_SITE_KEY
+from app.config import DONATION_MODE, TURNSTILE_SITE_KEY
 from app.core.database import db
 from app.schemas.user_schema import (
     AuthPayload,
@@ -76,10 +76,11 @@ def me(lp_session: str | None = Cookie(default=None), authorization: str | None 
 
 @router.get("/api/config")
 def public_config():
-    """Public client config (safe to expose): captcha site key."""
+    """Public client config (safe to expose): captcha site key, billing mode."""
     return {
         "turnstile_enabled": is_turnstile_enabled(),
         "turnstile_site_key": TURNSTILE_SITE_KEY,
+        "donation_mode": DONATION_MODE,
     }
 
 
