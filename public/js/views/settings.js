@@ -23,6 +23,12 @@ export function renderSettings() {
     ${renderHeader("Настройки", "Языки MVP и учетная запись.")}
     ${mustChange ? `<section class="card notice must-change-banner">Вы вошли по временному паролю. Смените его ниже.</section>` : ""}
       ${state.uiMode === "mobile" ? `<section class="card settings-card"><h2 class="settings-menu-title">Меню</h2><div class="settings-menu">${adminMenuLink}<a class="settings-menu-link" data-link href="/premium"><span class="nav-icon">★</span><span>${donationMode ? "Поддержать" : "Premium"}</span></a><a class="settings-menu-link" data-link href="/help"><span class="nav-icon">?</span><span>Help</span></a><a class="settings-menu-link" data-link href="/words"><span class="nav-icon">≡</span><span>Words</span></a><button type="button" class="settings-menu-link" data-ui-mode="desktop"><span class="nav-icon">🖥</span><span>Desktop</span></button></div></section>` : ""}
+    <section class="card settings-card contacts-card">
+      <h2 class="settings-menu-title">Связаться с нами</h2>
+      <p class="subtle">Если у вас есть вопросы, предложения или вы заметили ошибку в работе сервиса, напишите нам:</p>
+      <a class="contacts-email" href="mailto:support@language-puzzle.com">support@language-puzzle.com</a>
+      <p class="subtle">Мы особенно ценим сообщения с описанием проблемы: что вы пытались сделать, какой результат ожидали и что произошло на самом деле. Это помогает быстрее находить ошибки и улучшать Language Puzzle.</p>
+    </section>
     <section class="card settings-card subscription-row">
       ${donationMode
         ? `<div><h2 class="settings-menu-title">Поддержать разработчика</h2><p class="subtle">ИИ-функции включены для всех. Если проект полезен — поддержите его развитие.</p></div>

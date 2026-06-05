@@ -1264,6 +1264,45 @@ textarea {
   padding-top: 34px;
 }
 
+.landing-contacts {
+  background: var(--soft);
+  border-top: 1px solid var(--line);
+  padding: clamp(42px, 7vw, 86px) clamp(18px, 5vw, 64px);
+  display: flex;
+  justify-content: center;
+  text-align: center;
+}
+
+.landing-contacts-inner {
+  max-width: 640px;
+  display: grid;
+  gap: 16px;
+}
+
+.landing-contacts h2 {
+  margin: 0;
+  font-size: clamp(22px, 2.6vw, 30px);
+  line-height: 1.15;
+}
+
+.landing-contacts p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+  font-size: 16px;
+}
+
+.contacts-email {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+  word-break: break-word;
+}
+
+.contacts-email:hover {
+  text-decoration: underline;
+}
+
 .help-page {
   display: grid;
   gap: 1px;
@@ -2000,6 +2039,9 @@ textarea {
 .premium-features li { color: #3b4b5c; }
 .premium-history-title { margin: 8px 0 0; font-size: 1rem; }
 .subscription-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.contacts-card { display: grid; gap: 10px; }
+.contacts-card .contacts-email { font-size: 17px; justify-self: start; }
+.contacts-card p { margin: 0; }
 .donation-form { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
 .donation-form .label { max-width: 220px; }
 .donation-form input[type="number"] { width: 100%; }
