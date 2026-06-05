@@ -14,6 +14,7 @@ const AI_FEATURES = [
 export function renderBilling() {
   const data = state.billing;
   if (!data) return `<div class="empty">Загрузка...</div>`;
+  if (data.donation_mode) return renderDonation(data);
   const status = data.status || {};
   const isPremium = status.is_premium;
   const price = data.price_rub;
@@ -51,6 +52,42 @@ export function renderBilling() {
           <thead><tr><th>Дата</th><th>Сумма</th><th>Статус</th></tr></thead>
           <tbody>
             ${data.payments.map((p) => `<tr><td>${escapeHtml(formatDate(p.created_at))}</td><td>${escapeHtml(String(p.amount))} ${escapeHtml(p.currency || "RUB")}</td><td>${escapeHtml(p.status)}</td></tr>`).join("")}
+          </tbody>
+        </table>` : ""}
+    </section>
+  `;
+}
+
+function renderDonation(data) {
+  const loading = state.billingLoading;
+  const defaultAmount = Number(data.donation_default_rub) || 200;
+  const minAmount = Number(data.donation_min_rub) || 50;
+  const payments = data.payments || [];
+  return `
+    ${renderHeader("Поддержать разработчика", "ИИ-функции доступны всем бесплатно. Если проект полезен — поддержите его развитие.")}
+    <section class="card premium-card">
+      <div class="premium-status is-premium">
+        <h2>Спасибо, что пользуетесь Language Puzzle ❤</h2>
+        <p class="subtle">Все ИИ-функции включены для всех пользователей. Донат — добровольный и помогает развивать проект.</p>
+      </div>
+      <ul class="premium-features">
+        ${AI_FEATURES.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}
+      </ul>
+      ${data.available ? `
+        <form class="donation-form" id="donationForm">
+          <label class="label">Сумма поддержки, ₽
+            <input type="number" name="amount" min="${minAmount}" step="1" value="${defaultAmount}" inputmode="numeric" ${loading ? "disabled" : ""}>
+          </label>
+          <div class="toolbar">
+            <button class="primary" type="submit" data-billing-donate ${loading ? "disabled" : ""}>${loading ? "Переход к оплате..." : "Поддержать"}</button>
+          </div>
+        </form>` : `<p class="notice">Оплата временно недоступна.</p>`}
+      ${payments.length ? `
+        <h3 class="premium-history-title">История платежей</h3>
+        <table class="table desktop-table premium-history">
+          <thead><tr><th>Дата</th><th>Сумма</th><th>Статус</th></tr></thead>
+          <tbody>
+            ${payments.map((p) => `<tr><td>${escapeHtml(formatDate(p.created_at))}</td><td>${escapeHtml(String(p.amount))} ${escapeHtml(p.currency || "RUB")}</td><td>${escapeHtml(p.status)}</td></tr>`).join("")}
           </tbody>
         </table>` : ""}
     </section>

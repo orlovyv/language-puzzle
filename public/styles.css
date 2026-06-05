@@ -2000,6 +2000,9 @@ textarea {
 .premium-features li { color: #3b4b5c; }
 .premium-history-title { margin: 8px 0 0; font-size: 1rem; }
 .subscription-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.donation-form { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.donation-form .label { max-width: 220px; }
+.donation-form input[type="number"] { width: 100%; }
 
 /* Auth: Turnstile widget + must-change banner */
 .turnstile-box { min-height: 65px; margin: 4px 0; }

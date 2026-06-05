@@ -111,6 +111,19 @@ AI_DAILY_LIMIT_FREE = _int("AI_DAILY_LIMIT_FREE", 0)
 AI_DAILY_LIMIT_PREMIUM = _int("AI_DAILY_LIMIT_PREMIUM", 300)
 
 # --- Billing ---
+# Billing mode:
+#   "subscription" — legacy paid Premium scheme (kept intact, opt-in via ENV).
+#   "donation"     — "support the developer": AI features are free for everyone
+#                    and the Premium nav/screen become a voluntary donation form.
+BILLING_MODE = _str("BILLING_MODE", "donation").strip().lower()
+DONATION_MODE = BILLING_MODE == "donation"
+# In donation mode AI is unlocked for every user (no Premium gating).
+AI_FOR_EVERYONE = DONATION_MODE
+# Donation amount bounds / default suggestion (RUB).
+DONATION_MIN_RUB = _float("DONATION_MIN_RUB", 50)
+DONATION_DEFAULT_RUB = _float("DONATION_DEFAULT_RUB", 200)
+DONATION_MAX_RUB = _float("DONATION_MAX_RUB", 100000)
+
 # Active payment provider: "robokassa" (default) or "yookassa".
 PAYMENT_PROVIDER = _str("PAYMENT_PROVIDER", "robokassa").strip().lower()
 SUBSCRIPTION_PRICE_RUB = _float("SUBSCRIPTION_PRICE_RUB", 299)

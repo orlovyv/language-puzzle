@@ -80,6 +80,11 @@ class CheckoutPayload(BaseModel):
     plan: str | None = "premium"
 
 
+class DonationPayload(BaseModel):
+    # Voluntary "support the developer" donation amount in RUB.
+    amount: float
+
+
 class PasswordResetRequestPayload(BaseModel):
     email: str
 

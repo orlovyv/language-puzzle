@@ -151,6 +151,7 @@ def send_temporary_password_email(email: str, password: str) -> None:
 
 def public_user(user: dict[str, Any]) -> dict[str, Any]:
     # Imported here to avoid a circular import (billing -> auth_service).
+    from app.config import AI_FOR_EVERYONE, DONATION_MODE
     from app.services.billing.subscription_service import is_premium
 
     premium_until = user.get("premium_until")
@@ -167,6 +168,9 @@ def public_user(user: dict[str, Any]) -> dict[str, Any]:
         "plan": user.get("plan", "free"),
         "premium_until": str(premium_until) if premium_until else None,
         "is_premium": is_premium(user),
+        # AI features available to this user (Premium, or everyone in donation mode).
+        "ai_enabled": bool(AI_FOR_EVERYONE or is_premium(user)),
+        "donation_mode": DONATION_MODE,
         "must_change_password": bool(user.get("must_change_password", False)),
         "is_admin": is_admin(user),
         "created_at": str(user["created_at"]),
@@ -202,10 +206,11 @@ def require_user(conn, lp_session: str | None, authorization: str | None) -> dic
 
 
 def require_premium(conn, lp_session: str | None, authorization: str | None) -> dict[str, Any]:
+    from app.config import AI_FOR_EVERYONE
     from app.services.billing.subscription_service import is_premium
 
     user = require_user(conn, lp_session, authorization)
-    if not is_premium(user):
+    if not AI_FOR_EVERYONE and not is_premium(user):
         raise HTTPException(status_code=403, detail="Доступно по подписке.")
     return user
 

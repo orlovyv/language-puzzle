@@ -14,7 +14,7 @@ import hashlib
 from datetime import datetime, timezone
 from typing import Any
 
-from app.config import AI_DAILY_LIMIT_FREE, AI_DAILY_LIMIT_PREMIUM, LLM_MODEL
+from app.config import AI_DAILY_LIMIT_FREE, AI_DAILY_LIMIT_PREMIUM, AI_FOR_EVERYONE, LLM_MODEL
 from app.repositories import ai_repository
 from app.services.llm import prompts
 from app.services.llm.client import LLMUnavailable, chat_json, is_configured
@@ -34,6 +34,7 @@ def ai_healthcheck(conn, user: dict[str, Any] | None) -> dict[str, Any]:
         "configured": is_configured(),
         "model": LLM_MODEL,
         "is_premium": _is_premium(user),
+        "ai_enabled": _ai_enabled(user),
         "daily_limit": _daily_limit(user),
         "usage_today": usage_today,
         "ok": False,
@@ -79,8 +80,19 @@ def _is_premium(user: dict[str, Any] | None) -> bool:
     return until >= now
 
 
+def _ai_enabled(user: dict[str, Any] | None) -> bool:
+    """Whether AI features are available to this user.
+
+    In donation mode (``AI_FOR_EVERYONE``) AI is unlocked for every logged-in
+    user; otherwise it stays gated behind an active Premium subscription.
+    """
+    if not user:
+        return False
+    return AI_FOR_EVERYONE or _is_premium(user)
+
+
 def _daily_limit(user: dict[str, Any] | None) -> int:
-    return AI_DAILY_LIMIT_PREMIUM if _is_premium(user) else AI_DAILY_LIMIT_FREE
+    return AI_DAILY_LIMIT_PREMIUM if _ai_enabled(user) else AI_DAILY_LIMIT_FREE
 
 
 def _check_and_count_quota(conn, user: dict[str, Any] | None) -> None:

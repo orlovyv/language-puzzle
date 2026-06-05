@@ -82,3 +82,34 @@ def test_checkout_then_result_activates_premium(client):
                      data={"OutSum": "299.00", "InvId": inv_id, "SignatureValue": sig})
     assert ok2.status_code == 200
     assert ok2.text == f"OK{inv_id}"
+
+
+def test_donation_flow_does_not_grant_premium(client):
+    """A donation is recorded and paid, but never grants a subscription."""
+    _register(client)
+    status = client.get("/api/billing/status").json()
+    assert status["donation_mode"] is True  # default BILLING_MODE=donation
+
+    r = client.post("/api/billing/donate", json={"amount": 250})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    inv_id = data["payment_id"]
+    assert "auth.robokassa.ru" in data["confirmation_url"]
+    assert "250.00" in data["confirmation_url"]  # custom amount, not the sub price
+
+    sig = _md5(f"250.00:{inv_id}:pass2")
+    ok = client.post("/api/billing/robokassa-result",
+                    data={"OutSum": "250.00", "InvId": inv_id, "SignatureValue": sig})
+    assert ok.status_code == 200
+    assert ok.text == f"OK{inv_id}"
+
+    # Donation succeeded, but the user is NOT premium.
+    after = client.get("/api/billing/status").json()
+    assert after["status"]["is_premium"] is False
+    assert after["payments"][0]["status"] == "succeeded"
+
+
+def test_donation_rejects_amount_below_minimum(client):
+    _register(client)
+    r = client.post("/api/billing/donate", json={"amount": 1})
+    assert r.status_code == 400

@@ -33,7 +33,7 @@ export function renderKnowledge() {
             <span class="pill">semantic + frequency</span>
           </div>
           <form class="kg-form" id="knowledgeGraphForm">
-            <textarea name="text" spellcheck="false" placeholder="Airport travel, job interview, cooking at home или вставьте кусок текста..." ${isKnowledgeLoading ? "disabled" : ""}>${escapeHtml(sourceValue)}</textarea>
+            <textarea name="text" spellcheck="false" maxlength="1000" placeholder="Airport travel, job interview, cooking at home или вставьте кусок текста..." ${isKnowledgeLoading ? "disabled" : ""}>${escapeHtml(sourceValue)}</textarea>
             <div class="toolbar">
               <button class="primary" ${isKnowledgeLoading ? "disabled" : ""}>${isKnowledgeLoading ? "Generating..." : "Generate vocabulary"}</button>
               ${context ? `<button type="button" data-knowledge-to-learn>В Learn</button>` : ""}
@@ -123,10 +123,11 @@ export function renderKnowledgeDetail(item) {
   `;
 }
 
-// Premium-only AI hints (synonyms / mnemonic / context), loaded on demand.
+// AI hints (synonyms / mnemonic / context), loaded on demand. Available to
+// everyone in donation mode, otherwise Premium-only.
 export function renderAiCard(item) {
   if (!item || !item.knowledge_id) return "";
-  if (!(state.user?.is_premium || state.user?.is_admin)) return "";
+  if (!(state.user?.ai_enabled || state.user?.is_premium || state.user?.is_admin)) return "";
   const kind = item.kind === "phrase" ? "phrase" : "word";
   const card = state.aiCards?.[item.knowledge_id];
   const loading = state.aiCardLoadingIds?.has(item.knowledge_id);

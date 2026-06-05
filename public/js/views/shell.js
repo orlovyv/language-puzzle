@@ -65,8 +65,12 @@ function navigationItems() {
 
 export function renderNavigationLinks(variant = "desktop") {
   const isAdmin = Boolean(state.user?.is_admin);
+  const donationMode = Boolean(state.user?.donation_mode);
   return navigationItems()
     .filter(([path]) => path !== "/admin" || isAdmin)
+    // In donation mode the Premium screen is replaced by a donation form reached
+    // from Settings, so the Premium nav entry is hidden everywhere.
+    .filter(([path]) => path !== "/premium" || !donationMode)
     .filter(([path]) => variant !== "mobile" || !["/help", "/words", "/premium", "/admin"].includes(path))
     .map(([path, label, icon, disabled]) => {
     const active = isNavigationItemActive(path);

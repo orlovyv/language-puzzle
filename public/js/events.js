@@ -326,7 +326,9 @@ function bindKnowledgeEvents() {
   document.querySelector("#knowledgeGraphForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const data = Object.fromEntries(new FormData(event.currentTarget));
-    state.knowledgeInput = data.text || "";
+    // Cap the input at 1000 characters before generating the vocabulary.
+    data.text = (data.text || "").slice(0, 1000);
+    state.knowledgeInput = data.text;
     state.knowledgeLoading = true;
     state.message = "";
     renderApp();
@@ -551,6 +553,32 @@ function bindBillingEvents() {
     renderApp();
     try {
       const { confirmation_url } = await api("/api/billing/checkout", { method: "POST", body: {} });
+      if (confirmation_url) {
+        window.location.href = confirmation_url;
+        return;
+      }
+      state.message = "Не удалось создать платёж.";
+    } catch (error) {
+      state.message = error.message || "Оплата временно недоступна.";
+    } finally {
+      state.billingLoading = false;
+      renderApp();
+    }
+  });
+
+  document.querySelector("#donationForm")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const amount = Number(new FormData(event.currentTarget).get("amount"));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      state.message = "Введите сумму поддержки.";
+      renderApp();
+      return;
+    }
+    state.billingLoading = true;
+    state.message = "";
+    renderApp();
+    try {
+      const { confirmation_url } = await api("/api/billing/donate", { method: "POST", body: { amount } });
       if (confirmation_url) {
         window.location.href = confirmation_url;
         return;

@@ -276,8 +276,9 @@ def kg_build_phrasal_verbs(conn, ranked: list[dict[str, Any]], language: str = "
 
 
 def kg_build_bridge_topics(conn, user: dict[str, Any], topic: str, ranked: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    # Premium: AI-crafted, vivid bridge situations (titles + reason + seed words).
-    if enrichment._is_premium(user):
+    # AI-crafted, vivid bridge situations (titles + reason + seed words) when AI
+    # is available — Premium, or everyone in donation mode.
+    if enrichment._ai_enabled(user):
         related = [item["word"] for item in ranked[:20] if item.get("word")]
         try:
             ai_topics = enrichment.ai_bridge_topics(conn, user, topic, related)
