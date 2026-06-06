@@ -266,7 +266,7 @@ export function renderLanding() {
       <section class="landing-contacts">
         <div class="landing-contacts-inner">
           <h2>Помогите сделать Language Puzzle лучше</h2>
-          <p>Сервис находится в развитии, поэтому нам очень важна обратная связь. Если вы нашли ошибку, столкнулись с неудобством или хотите предложить идею — напишите на <a class="contacts-email" href="mailto:support@language-puzzle.com">support@language-puzzle.com</a>.</p>
+          <p>Сервис находится в развитии, поэтому нам очень важна обратная связь. Если вы нашли ошибку, столкнулись с неудобством или хотите предложить идею — напишите на <a class="contacts-email" href="mailto:language.puzzle.com@gmail.com">language.puzzle.com@gmail.com</a>.</p>
         </div>
       </section>
     </main>
