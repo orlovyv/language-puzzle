@@ -23,6 +23,10 @@ class DocumentPayload(BaseModel):
     raw_text: str = ""
 
 
+class ExtractUrlPayload(BaseModel):
+    url: str
+
+
 class StatusPayload(BaseModel):
     status: str
     confidence: float | None = None
