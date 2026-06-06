@@ -26,7 +26,7 @@ export function renderSettings() {
     <section class="card settings-card contacts-card">
       <h2 class="settings-menu-title">Связаться с нами</h2>
       <p class="subtle">Если у вас есть вопросы, предложения или вы заметили ошибку в работе сервиса, напишите нам:</p>
-      <a class="contacts-email" href="mailto:support@language-puzzle.com">support@language-puzzle.com</a>
+      <a class="contacts-email" href="mailto:language.puzzle.com@gmail.com">language.puzzle.com@gmail.com</a>
       <p class="subtle">Мы особенно ценим сообщения с описанием проблемы: что вы пытались сделать, какой результат ожидали и что произошло на самом деле. Это помогает быстрее находить ошибки и улучшать Language Puzzle.</p>
     </section>
     <section class="card settings-card subscription-row">
