@@ -110,6 +110,15 @@ LLM_TIMEOUT = _float("LLM_TIMEOUT", 20)
 AI_DAILY_LIMIT_FREE = _int("AI_DAILY_LIMIT_FREE", 0)
 AI_DAILY_LIMIT_PREMIUM = _int("AI_DAILY_LIMIT_PREMIUM", 300)
 
+# --- URL import & language guard ---
+# Import article text from a web link (trafilatura main text + BeautifulSoup
+# alternative blocks). Set USE_URL_IMPORT=0 to disable the endpoint.
+USE_URL_IMPORT = _flag("USE_URL_IMPORT", "1")
+URL_FETCH_TIMEOUT = _float("URL_FETCH_TIMEOUT", 15)
+URL_FETCH_MAX_BYTES = _int("URL_FETCH_MAX_BYTES", 3_000_000)  # ~3 MB cap
+# Reject non-English uploads. Set REQUIRE_ENGLISH_TEXT=0 to disable.
+REQUIRE_ENGLISH_TEXT = _flag("REQUIRE_ENGLISH_TEXT", "1")
+
 # --- Billing ---
 # Billing mode:
 #   "subscription" — legacy paid Premium scheme (kept intact, opt-in via ENV).

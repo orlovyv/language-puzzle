@@ -4,13 +4,15 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Cookie, Header, HTTPException
 
+from app.config import USE_URL_IMPORT
 from app.core.database import db
 from app.repositories import document_repository, word_repository
-from app.schemas.user_schema import DocumentPayload
+from app.schemas.user_schema import DocumentPayload, ExtractUrlPayload
 from app.services.analysis import analyze_document
 from app.services.auth_service import require_user
 from app.services.documents import build_pieces, document_summary, validate_document_payload
 from app.services.text_processing import clean_text
+from app.services.url_extraction import extract_from_url
 from app.utils.security import token_id
 
 router = APIRouter()
@@ -55,6 +57,15 @@ def create_document(payload: DocumentPayload, lp_session: str | None = Cookie(de
         )
         analysis = analyze_document(conn, user, doc)
         return {"document": document_summary(conn, doc), "analysis": analysis}
+
+
+@router.post("/api/documents/extract-url")
+def extract_url(payload: ExtractUrlPayload, lp_session: str | None = Cookie(default=None), authorization: str | None = Header(default=None)):
+    with db() as conn:
+        require_user(conn, lp_session, authorization)
+        if not USE_URL_IMPORT:
+            raise HTTPException(status_code=403, detail="Импорт из ссылки отключён.")
+        return extract_from_url(payload.url)
 
 
 @router.get("/api/documents/{document_id}")

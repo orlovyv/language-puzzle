@@ -4,7 +4,7 @@
 
 import { api } from "./api.js";
 import { MAX_RAW_TEXT_LINES, state } from "./state.js";
-import { ankiFileName, cleanTranslation, countTextLines, formatRangeValue, looksLikeSubtitleText, normalizeUser, unitKey, validateRawText } from "./utils.js";
+import { ankiFileName, cleanTranslation, countTextLines, escapeHtml, formatRangeValue, looksLikeSubtitleText, normalizeUser, unitKey, validateRawText } from "./utils.js";
 import {
   applyKnowledgeContextStatus,
   applyLocalTranslation,
@@ -21,6 +21,10 @@ import { loadRoute, navigate } from "./router.js";
 
 // Scroll position to restore in the document reader after a re-render.
 let pendingReaderScrollTop = null;
+
+// Last URL-import result (recommended main text + alternative blocks). Kept at
+// module scope so it survives the Upload form's direct-DOM updates.
+let urlExtraction = null;
 
 export function bindRoute() {
   bindSharedEvents();
@@ -165,6 +169,44 @@ function bindUploadEvents() {
     }
   });
 
+  const urlButton = document.querySelector("[data-analyze-url]");
+  urlButton?.addEventListener("click", async () => {
+    const input = document.querySelector("input[name=source_url]");
+    const container = document.querySelector("[data-url-blocks]");
+    const url = (input?.value || "").trim();
+    if (!container) return;
+    if (!/^https?:\/\//i.test(url)) {
+      showUrlBlocksMessage(container, "Введите ссылку, начинающуюся с http:// или https://");
+      return;
+    }
+    const originalLabel = urlButton.textContent;
+    urlButton.disabled = true;
+    urlButton.textContent = "Загрузка...";
+    container.hidden = false;
+    container.innerHTML = `<p class="subtle">Загружаем и разбираем страницу...</p>`;
+    try {
+      const result = await api("/api/documents/extract-url", { method: "POST", body: { url } });
+      urlExtraction = { ...result, selected: new Set() };
+      if (urlExtraction.main_text) urlExtraction.selected.add("main");
+      if (!urlExtraction.main_text && !(urlExtraction.blocks || []).length) {
+        urlExtraction = null;
+        showUrlBlocksMessage(container, "Не удалось извлечь текст из этой ссылки. Попробуйте другую.");
+        return;
+      }
+      renderUrlBlocks(container);
+    } catch (error) {
+      urlExtraction = null;
+      showUrlBlocksMessage(container, error.message || "Не удалось загрузить ссылку.");
+    } finally {
+      urlButton.disabled = false;
+      urlButton.textContent = originalLabel;
+    }
+  });
+
+  // Restore previously extracted blocks after a re-render of the Upload view.
+  const urlBlocksContainer = document.querySelector("[data-url-blocks]");
+  if (urlBlocksContainer && urlExtraction) renderUrlBlocks(urlBlocksContainer);
+
   document.querySelector("input[type=file]")?.addEventListener("change", async (event) => {
     const file = event.currentTarget.files[0];
     if (!file) return;
@@ -203,6 +245,90 @@ function bindUploadEvents() {
       document.querySelector("select[name=type]").value = "srt";
     }
   });
+}
+
+function urlBlockPreview(text) {
+  const flat = String(text || "").replace(/\s+/g, " ").trim();
+  return flat.length > 200 ? `${flat.slice(0, 200)}…` : flat;
+}
+
+function showUrlBlocksMessage(container, message) {
+  container.hidden = false;
+  container.innerHTML = `<p class="notice">${escapeHtml(message)}</p>`;
+}
+
+function setUrlApplyMessage(container, message) {
+  const target = container.querySelector("[data-url-apply-msg]");
+  if (target) target.textContent = message;
+}
+
+// Render the recommended main text + alternative blocks with checkboxes, then
+// wire local handlers (no global re-render, so typed form fields are preserved).
+function renderUrlBlocks(container) {
+  if (!urlExtraction) return;
+  const { main_text: mainText, blocks = [], selected } = urlExtraction;
+  const mainCard = mainText
+    ? `<label class="url-block url-block-main">
+         <input type="checkbox" data-url-block="main" ${selected.has("main") ? "checked" : ""}>
+         <span class="url-block-body">
+           <strong>Рекомендованный основной текст</strong>
+           <span class="url-block-meta">${mainText.length} символов</span>
+           <span class="url-block-preview">${escapeHtml(urlBlockPreview(mainText))}</span>
+         </span>
+       </label>`
+    : "";
+  const altCards = blocks.map((block) => `
+    <label class="url-block">
+      <input type="checkbox" data-url-block="${block.id}" ${selected.has(String(block.id)) ? "checked" : ""}>
+      <span class="url-block-body">
+        <strong>Блок ${block.id + 1}</strong>
+        <span class="url-block-meta">${block.chars} символов</span>
+        <span class="url-block-preview">${escapeHtml(block.preview)}</span>
+      </span>
+    </label>`).join("");
+  container.hidden = false;
+  container.innerHTML = `
+    ${mainCard}
+    ${altCards ? `<p class="subtle url-blocks-subtitle">Альтернативные блоки</p>${altCards}` : ""}
+    <div class="url-blocks-actions">
+      <button class="primary" type="button" data-apply-url-blocks>Вставить выбранный текст</button>
+      <span class="subtle" data-url-apply-msg></span>
+    </div>
+  `;
+  container.querySelectorAll("[data-url-block]").forEach((checkbox) => {
+    checkbox.addEventListener("change", (event) => {
+      const key = event.currentTarget.dataset.urlBlock;
+      if (event.currentTarget.checked) selected.add(key);
+      else selected.delete(key);
+    });
+  });
+  container.querySelector("[data-apply-url-blocks]")?.addEventListener("click", () => applyUrlBlocks(container));
+}
+
+// Move the selected blocks into the Текст field and the link into Название.
+function applyUrlBlocks(container) {
+  if (!urlExtraction) return;
+  const { url, main_text: mainText, blocks = [], selected } = urlExtraction;
+  const parts = [];
+  if (selected.has("main") && mainText) parts.push(mainText);
+  blocks.forEach((block) => {
+    if (selected.has(String(block.id))) parts.push(block.text);
+  });
+  if (!parts.length) {
+    setUrlApplyMessage(container, "Выберите хотя бы один блок.");
+    return;
+  }
+  const text = parts.join("\n\n");
+  const titleInput = document.querySelector("input[name=title]");
+  const textarea = document.querySelector("textarea[name=raw_text]");
+  if (titleInput && !titleInput.value.trim()) titleInput.value = url;
+  if (textarea) textarea.value = text;
+  try {
+    validateRawText(text);
+    setUrlApplyMessage(container, "Текст вставлен в поле «Текст» ниже.");
+  } catch (error) {
+    setUrlApplyMessage(container, error.message);
+  }
 }
 
 function bindDocumentEvents() {

@@ -7,8 +7,10 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.config import REQUIRE_ENGLISH_TEXT
 from app.schemas.user_schema import DocumentPayload
 from app.services.analysis import analyze_document, get_analysis
+from app.services.language_detection import is_probably_english
 from app.services.text_processing import (
     NLP,
     clean_text,
@@ -30,6 +32,10 @@ def validate_document_payload(payload: DocumentPayload) -> None:
     lines = count_text_lines(payload.raw_text)
     if lines > MAX_RAW_TEXT_LINES:
         raise HTTPException(status_code=400, detail=f"Текст слишком длинный: {lines} строк. Максимум {MAX_RAW_TEXT_LINES} строк.")
+    # English-only corpus: block confidently non-English uploads (pasted text,
+    # files and URL-imported blocks all funnel through here).
+    if REQUIRE_ENGLISH_TEXT and not is_probably_english(clean_text(payload.raw_text, payload.type)):
+        raise HTTPException(status_code=400, detail="Текст должен быть на английском языке. Загрузите англоязычный текст.")
 
 
 def document_summary(conn, doc: dict[str, Any]) -> dict[str, Any]:
